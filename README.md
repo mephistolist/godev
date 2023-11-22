@@ -1,2 +1,2 @@
 # godev
-Very, very modest devops in Golang that needs work at this time. 
+Very, very modest devops project in Golang that needs more work at this time. 
