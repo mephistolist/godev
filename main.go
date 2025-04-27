@@ -7,6 +7,8 @@ import (
 	"os"
 	"os/user"
 	"path/filepath"
+	"strconv"
+	"strings"
 	"sync"
 	"syscall"
 	"time"
@@ -87,11 +89,45 @@ func main() {
 		userArg = currentUser.Username
 	}
 
-	// Get list of hosts
-	var hosts []string
+	// Define HostInfo struct
+	type HostInfo struct {
+		User string
+		Host string
+		Port int
+	}
+
+	// Parser for inventory lines
+	parseInventoryLine := func(line, defaultUser string, defaultPort int) (HostInfo, error) {
+		user := defaultUser
+		port := defaultPort
+		host := line
+
+		if strings.Contains(line, "@") {
+			parts := strings.SplitN(line, "@", 2)
+			user = parts[0]
+			host = parts[1]
+		}
+
+		if strings.Contains(host, ":") {
+			parts := strings.SplitN(host, ":", 2)
+			host = parts[0]
+			p, err := strconv.Atoi(parts[1])
+			if err != nil {
+				return HostInfo{}, fmt.Errorf("invalid port in line: %s", line)
+			}
+			port = p
+		}
+
+		return HostInfo{User: user, Host: host, Port: port}, nil
+	}
+
+	var hosts []HostInfo
+
 	if hostArg != "" {
-		hosts = append(hosts, hostArg)
+		// Single host mode
+		hosts = append(hosts, HostInfo{User: userArg, Host: hostArg, Port: portArg})
 	} else {
+		// Inventory file mode
 		f, err := os.Open("inventory")
 		if err != nil {
 			fmt.Println("Error: No -host provided and inventory file not found.")
@@ -102,9 +138,15 @@ func main() {
 		scanner := bufio.NewScanner(f)
 		for scanner.Scan() {
 			line := scanner.Text()
-			if line != "" {
-				hosts = append(hosts, line)
+			if line == "" {
+				continue
 			}
+			h, err := parseInventoryLine(line, userArg, portArg)
+			if err != nil {
+				fmt.Printf("Skipping invalid inventory line: %s\n", line)
+				continue
+			}
+			hosts = append(hosts, h)
 		}
 		if err := scanner.Err(); err != nil {
 			fmt.Println("Error reading inventory file:", err)
@@ -120,19 +162,19 @@ func main() {
 
 	for _, h := range hosts {
 		wg.Add(1)
-		go func(host string) {
+		go func(h HostInfo) {
 			defer wg.Done()
 			sem <- struct{}{}
 			defer func() { <-sem }()
 
-			output, err := client.Run(userArg, passwordArg, fileArg, host, portArg, timeout)
+			output, err := client.Run(h.User, passwordArg, fileArg, h.Host, h.Port, timeout)
 
 			mu.Lock()
 			defer mu.Unlock()
 
-			fmt.Printf("\n=== Connecting to host: %s ===\n", host)
+			fmt.Printf("\n=== Connecting to host: %s ===\n", h.Host)
 			if err != nil {
-				fmt.Printf("Error with host %s: %v\n", host, err)
+				fmt.Printf("Error with host %s: %v\n", h.Host, err)
 			} else {
 				fmt.Printf("\n%s", output)
 			}
