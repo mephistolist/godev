@@ -1,0 +1,9 @@
+Then for every command in lines.txt, wrap it like:
+
+echo "password" | sudo -S your_command
+
+or with doas:
+
+echo "password" | doas -S your_command
+
+(You can allow users to choose between sudo or doas too if you want.)
