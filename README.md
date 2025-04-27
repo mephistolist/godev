@@ -1,2 +1,2 @@
 # godev
-Very, very modest devops project in Golang that needs more work at this time. 
+A cross-platform devops project in Golang that's built for speed.
