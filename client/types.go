@@ -1,5 +1,11 @@
 package client
 
+type HostInfo struct {
+	User string
+	Host string
+	Port int
+}
+
 type Result struct {
 	Host   string
 	Output string
