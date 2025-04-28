@@ -18,7 +18,7 @@ import (
 )
 
 func main() {
-	var userArg, passwordArg, fileArg, hostArg string
+	var userArg, passwordArg, fileArg, hostArg, scriptArg string
 	var portArg int
 	var timeoutArg string
 	var promptForPassword bool
@@ -32,11 +32,12 @@ func main() {
 	flag.StringVar(&userArg, "user", "", "SSH username")
 	flag.StringVar(&fileArg, "file", "lines.txt", "File containing commands")
 	flag.StringVar(&hostArg, "host", "", "Single IP address or hostname")
-	flag.StringVar(&timeoutArg, "timeout", "10s", "Timeout for SSH connection (e.g., 10s)")
+	flag.StringVar(&timeoutArg, "timeout", "0s", "Timeout for SSH connection (e.g., 10s)")
 	flag.IntVar(&portArg, "port", 22, "SSH port")
 	flag.BoolVar(&promptForPassword, "password", false, "Prompt for SSH password")
+	flag.StringVar(&scriptArg, "script", "", "Path to a script or binary to upload and execute")
 
-	// Allow -h as an alias for -host
+	// Allow -h as alias for -host
 	for i, arg := range os.Args {
 		if arg == "-h" && i+1 < len(os.Args) {
 			os.Args[i] = "-host"
@@ -79,7 +80,6 @@ func main() {
 		return
 	}
 
-	// Determine user if not provided
 	if userArg == "" {
 		currentUser, err := user.Current()
 		if err != nil {
@@ -89,14 +89,12 @@ func main() {
 		userArg = currentUser.Username
 	}
 
-	// Define HostInfo struct
 	type HostInfo struct {
 		User string
 		Host string
 		Port int
 	}
 
-	// Parser for inventory lines
 	parseInventoryLine := func(line, defaultUser string, defaultPort int) (HostInfo, error) {
 		user := defaultUser
 		port := defaultPort
@@ -124,10 +122,8 @@ func main() {
 	var hosts []HostInfo
 
 	if hostArg != "" {
-		// Single host mode
 		hosts = append(hosts, HostInfo{User: userArg, Host: hostArg, Port: portArg})
 	} else {
-		// Inventory file mode
 		f, err := os.Open("inventory")
 		if err != nil {
 			fmt.Println("Error: No -host provided and inventory file not found.")
@@ -157,8 +153,7 @@ func main() {
 	var wg sync.WaitGroup
 	var mu sync.Mutex
 
-	// Optional: limit concurrency
-	sem := make(chan struct{}, 5) // max 5 concurrent SSH connections
+	sem := make(chan struct{}, 5)
 
 	for _, h := range hosts {
 		wg.Add(1)
@@ -167,19 +162,37 @@ func main() {
 			sem <- struct{}{}
 			defer func() { <-sem }()
 
-			output, err := client.Run(h.User, passwordArg, fileArg, h.Host, h.Port, timeout)
+			var output string
+			var err error
+
+			if scriptArg != "" {
+				output, err = client.RunRemoteScript(h.User, passwordArg, h.Host, h.Port, timeout, scriptArg)
+			} else {
+				output, err = client.Run(h.User, passwordArg, fileArg, h.Host, h.Port, timeout)
+			}
 
 			mu.Lock()
 			defer mu.Unlock()
 
-			fmt.Printf("\n=== Connecting to host: %s ===\n", h.Host)
 			if err != nil {
-				fmt.Printf("Error with host %s: %v\n", h.Host, err)
+				fmt.Printf("\n======================================\n")
+				fmt.Printf("------ Error with host %s -----\n", h.Host)
+				fmt.Printf("======================================\n")
+				fmt.Printf("%v", err)
 			} else {
-				fmt.Printf("\n%s", output)
+				fmt.Printf("\n======================================\n")
+				fmt.Printf("----- Output from host %s -----\n", h.Host)
+				fmt.Printf("======================================\n\n")
+				fmt.Printf("%s", output)
+				//fmt.Printf("----------------------------------------\n")
+			}
+	
+			if timeout > 0 {
+				time.Sleep(timeout)
 			}
 		}(h)
 	}
 
 	wg.Wait()
+	fmt.Printf("\n")
 }
