@@ -30,7 +30,7 @@ func main() {
 	}
 
 	flag.StringVar(&userArg, "user", "", "SSH username")
-	flag.StringVar(&fileArg, "file", "lines.txt", "File containing commands")
+	flag.StringVar(&fileArg, "file", "commands.txt", "File containing commands")
 	flag.StringVar(&hostArg, "host", "", "Single IP address or hostname")
 	flag.StringVar(&timeoutArg, "timeout", "0s", "Timeout for SSH connection (e.g., 10s)")
 	flag.IntVar(&portArg, "port", 22, "SSH port")
@@ -43,32 +43,30 @@ func main() {
 			os.Args[i] = "-host"
 		}
 	}
-
 	flag.Parse()
 
 	// Prompt for password if requested
 	if promptForPassword {
 		fmt.Print("Password: ")
-		bytePassword, err := term.ReadPassword(int(syscall.Stdin))
+		p, err := term.ReadPassword(int(syscall.Stdin))
 		fmt.Println()
 		if err != nil {
 			fmt.Println("Error reading password:", err)
 			return
 		}
-		passwordArg = string(bytePassword)
+		passwordArg = string(p)
 	}
 
-	// If no password, check for usable private key
+	// If no password from CLI, ensure a key exists
 	if passwordArg == "" {
-		foundKey := false
-		for _, filename := range []string{"id_rsa", "id_ed25519"} {
-			keyPath := filepath.Join(homeDir, ".ssh", filename)
-			if _, err := os.Stat(keyPath); err == nil {
-				foundKey = true
+		ok := false
+		for _, fn := range []string{"id_rsa", "id_ed25519"} {
+			if _, err := os.Stat(filepath.Join(homeDir, ".ssh", fn)); err == nil {
+				ok = true
 				break
 			}
 		}
-		if !foundKey {
+		if !ok {
 			fmt.Println("Error: No password provided and no usable private key found.")
 			return
 		}
@@ -81,112 +79,121 @@ func main() {
 	}
 
 	if userArg == "" {
-		currentUser, err := user.Current()
+		u, err := user.Current()
 		if err != nil {
 			fmt.Println("Error getting current user:", err)
 			return
 		}
-		userArg = currentUser.Username
+		userArg = u.Username
 	}
 
-	type HostInfo struct {
-		User string
-		Host string
-		Port int
-	}
+	// parseInventoryLine handles stripping inline comments and blank lines
+	parseInventoryLine := func(raw string, defUser string, defPort int) (client.HostInfo, error) {
+		// strip leading/trailing whitespace
+		line := strings.TrimSpace(raw)
+		// remove inline comment
+		if idx := strings.Index(line, "#"); idx >= 0 {
+			line = strings.TrimSpace(line[:idx])
+		}
+		// skip if empty after comment removal
+		if line == "" {
+			return client.HostInfo{}, nil
+		}
 
-	parseInventoryLine := func(line, defaultUser string, defaultPort int) (HostInfo, error) {
-		user := defaultUser
-		port := defaultPort
-		host := line
+		user := defUser
+		port := defPort
+		password := ""
+		hostPort := line
 
-		if strings.Contains(line, "@") {
-			parts := strings.SplitN(line, "@", 2)
+		// split out user@
+		if parts := strings.SplitN(hostPort, "@", 2); len(parts) == 2 {
 			user = parts[0]
-			host = parts[1]
+			hostPort = parts[1]
 		}
 
-		if strings.Contains(host, ":") {
-			parts := strings.SplitN(host, ":", 2)
+		// split out ::password
+		if parts := strings.SplitN(hostPort, "::", 2); len(parts) == 2 {
+			hostPort = parts[0]
+			password = parts[1]
+		}
+
+		// split out :port
+		host := hostPort
+		if parts := strings.SplitN(hostPort, ":", 2); len(parts) == 2 {
 			host = parts[0]
-			p, err := strconv.Atoi(parts[1])
-			if err != nil {
-				return HostInfo{}, fmt.Errorf("invalid port in line: %s", line)
+			if p, err := strconv.Atoi(parts[1]); err == nil {
+				port = p
+			} else {
+				return client.HostInfo{}, fmt.Errorf("invalid port in line %q", raw)
 			}
-			port = p
 		}
 
-		return HostInfo{User: user, Host: host, Port: port}, nil
+		return client.HostInfo{User: user, Host: host, Port: port, Password: password}, nil
 	}
 
-	var hosts []HostInfo
-
+	// build hosts slice
+	var hosts []client.HostInfo
 	if hostArg != "" {
-		hosts = append(hosts, HostInfo{User: userArg, Host: hostArg, Port: portArg})
+		hosts = append(hosts, client.HostInfo{
+			User:     userArg,
+			Host:     hostArg,
+			Port:     portArg,
+			Password: passwordArg,
+		})
 	} else {
 		f, err := os.Open("inventory")
 		if err != nil {
-			fmt.Println("Error: No -host provided and inventory file not found.")
+			fmt.Println("Error: inventory file not found and no -host provided.")
 			return
 		}
 		defer f.Close()
 
-		scanner := bufio.NewScanner(f)
-		for scanner.Scan() {
-			line := scanner.Text()
-			if line == "" {
-				continue
-			}
-			h, err := parseInventoryLine(line, userArg, portArg)
+		s := bufio.NewScanner(f)
+		for s.Scan() {
+			h, err := parseInventoryLine(s.Text(), userArg, portArg)
 			if err != nil {
-				fmt.Printf("Skipping invalid inventory line: %s\n", line)
+				fmt.Printf("Skipping invalid line: %s\n", err)
 				continue
 			}
-			hosts = append(hosts, h)
+			if h.Host != "" {
+				hosts = append(hosts, h)
+			}
 		}
-		if err := scanner.Err(); err != nil {
-			fmt.Println("Error reading inventory file:", err)
+		if err := s.Err(); err != nil {
+			fmt.Println("Error reading inventory:", err)
 			return
 		}
 	}
 
 	var wg sync.WaitGroup
 	var mu sync.Mutex
-
 	sem := make(chan struct{}, 5)
 
 	for _, h := range hosts {
 		wg.Add(1)
-		go func(h HostInfo) {
+		go func(h client.HostInfo) {
 			defer wg.Done()
 			sem <- struct{}{}
 			defer func() { <-sem }()
 
-			var output string
+			var out string
 			var err error
-
 			if scriptArg != "" {
-				output, err = client.RunRemoteScript(h.User, passwordArg, h.Host, h.Port, timeout, scriptArg)
+				out, err = client.RunRemoteScript(h.User, h.Password, h.Host, h.Port, timeout, scriptArg)
 			} else {
-				output, err = client.Run(h.User, passwordArg, fileArg, h.Host, h.Port, timeout)
+				out, err = client.Run(h.User, h.Password, fileArg, h.Host, h.Port, timeout)
 			}
 
 			mu.Lock()
 			defer mu.Unlock()
-
+			fmt.Printf("\n======================================\n")
 			if err != nil {
-				fmt.Printf("\n======================================\n")
 				fmt.Printf("------ Error with host %s -----\n", h.Host)
-				fmt.Printf("======================================\n")
-				fmt.Printf("%v", err)
+				fmt.Printf("======================================\n%v\n", err)
 			} else {
-				fmt.Printf("\n======================================\n")
 				fmt.Printf("----- Output from host %s -----\n", h.Host)
-				fmt.Printf("======================================\n\n")
-				fmt.Printf("%s", output)
-				//fmt.Printf("----------------------------------------\n")
+				fmt.Printf("======================================\n\n%s\n", out)
 			}
-	
 			if timeout > 0 {
 				time.Sleep(timeout)
 			}
@@ -194,5 +201,4 @@ func main() {
 	}
 
 	wg.Wait()
-	fmt.Printf("\n")
 }
