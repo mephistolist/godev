@@ -14,7 +14,6 @@ import (
 
     "golang.org/x/crypto/ssh"
     "golang.org/x/crypto/ssh/agent"
-    "golang.org/x/term"
     "github.com/pkg/sftp"
 )
 
@@ -25,42 +24,25 @@ func main() {
     }
 
     userFlag := flag.String("user", me.Username, "Username for remote connection (default: current user)")
-    promptPassword := flag.Bool("password", false, "Prompt for remote login password")
+    passwordFlag := flag.String("password", "", "Password for remote login (optional)")
     host := flag.String("host", "", "Remote host (required)")
     port := flag.Int("port", 22, "SSH port (default 22)")
-    timeout := flag.Duration("timeout", 30*time.Second, "Connection timeout")
+    timeoutSeconds := flag.Int("timeout", 30, "Connection timeout in seconds")
     script := flag.String("script", "", "Local script to upload and run (required)")
 
     flag.Parse()
 
     if *host == "" || *script == "" {
         flag.Usage()
-        log.Fatal("host and script are required")
+        log.Fatal("host and script options are required")
     }
 
-    var password string
-    if *promptPassword {
-        fmt.Fprint(os.Stderr, "Password: ")
-        pass, err := term.ReadPassword(int(os.Stdin.Fd()))
-        fmt.Fprintln(os.Stderr) // newline after password
-        fmt.Fprintln(os.Stdout) // blank line after password
-        if err != nil {
-            log.Fatalf("failed to read password: %v", err)
-        }
-        password = string(pass)
-    }
-
-    output, err := RunWindowsRemoteScript(*userFlag, password, *host, *port, *timeout, *script)
+    output, err := RunWindowsRemoteScript(*userFlag, *passwordFlag, *host, *port, time.Duration(*timeoutSeconds)*time.Second, *script)
     if err != nil {
         log.Fatalf("remote script failed: %v", err)
     }
 
-    fmt.Println("======================================")
-    fmt.Printf("----- Output from host %s -----\n", *host)
-    fmt.Println("======================================")
-    fmt.Println()
     fmt.Print(output)
-    fmt.Println() // newline after output
 }
 
 func RunWindowsRemoteScript(user, password, host string, port int, timeout time.Duration, scriptPath string) (string, error) {
@@ -131,7 +113,7 @@ func RunCommand(user, password, host string, port int, timeout time.Duration, cm
 func connectSSH(user, password, host string, port int, timeout time.Duration) (*ssh.Client, error) {
     var methods []ssh.AuthMethod
 
-    // Try SSH Agent
+    // Try SSH Agent first
     if sock := os.Getenv("SSH_AUTH_SOCK"); sock != "" {
         if conn, err := net.Dial("unix", sock); err == nil {
             agentClient := agent.NewClient(conn)
@@ -139,7 +121,7 @@ func connectSSH(user, password, host string, port int, timeout time.Duration) (*
         }
     }
 
-    // Prompted password (if any)
+    // Password authentication
     if strings.TrimSpace(password) != "" {
         methods = append(methods, ssh.Password(password))
     }
