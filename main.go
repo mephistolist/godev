@@ -45,6 +45,12 @@ func main() {
 	}
 	flag.Parse()
 
+	// Validate the port number
+	if portArg < 1 || portArg > 65335 {
+		fmt.Println("Error: Port must be between 1 and 65335.")
+		return
+	}
+
 	if timeoutSeconds < 0 {
 		fmt.Println("Error: Timeout must be a positive integer.")
 		return
