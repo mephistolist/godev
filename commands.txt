@@ -1,1 +1,1 @@
-echo "The commands should be here."
+echo Works!
