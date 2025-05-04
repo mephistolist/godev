@@ -6,4 +6,3 @@ Keep checking semgrep.<br>
 Refactor for performance.<br>
 Ponder making WinSync part of the rest of the code.<br>
 Create installer script and polish README.<br>
-Make options short and long.<br>
