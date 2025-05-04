@@ -20,7 +20,7 @@ import (
 func main() {
 	var userArg, passwordArg, fileArg, hostArg, scriptArg string
 	var portArg int
-	var timeoutArg string
+	var timeoutSeconds int
 	var promptForPassword bool
 
 	homeDir, err := os.UserHomeDir()
@@ -32,7 +32,7 @@ func main() {
 	flag.StringVar(&userArg, "user", "", "SSH username")
 	flag.StringVar(&fileArg, "file", "commands.txt", "File containing commands")
 	flag.StringVar(&hostArg, "host", "", "Single IP address or hostname")
-	flag.StringVar(&timeoutArg, "timeout", "0s", "Timeout for SSH connection (e.g., 10s)")
+	flag.IntVar(&timeoutSeconds, "timeout", 0, "Timeout in seconds for SSH connection (e.g., 10)")
 	flag.IntVar(&portArg, "port", 22, "SSH port")
 	flag.BoolVar(&promptForPassword, "password", false, "Prompt for SSH password")
 	flag.StringVar(&scriptArg, "script", "", "Path to a script or binary to upload and execute")
@@ -44,6 +44,12 @@ func main() {
 		}
 	}
 	flag.Parse()
+
+	if timeoutSeconds < 0 {
+		fmt.Println("Error: Timeout must be a positive integer.")
+		return
+	}
+	timeout := time.Duration(timeoutSeconds) * time.Second
 
 	// Prompt for password if requested
 	if promptForPassword {
@@ -72,12 +78,6 @@ func main() {
 		}
 	}
 
-	timeout, err := time.ParseDuration(timeoutArg)
-	if err != nil {
-		fmt.Println("Error parsing timeout:", err)
-		return
-	}
-
 	if userArg == "" {
 		u, err := user.Current()
 		if err != nil {
@@ -89,13 +89,10 @@ func main() {
 
 	// parseInventoryLine handles stripping inline comments and blank lines
 	parseInventoryLine := func(raw string, defUser string, defPort int) (client.HostInfo, error) {
-		// strip leading/trailing whitespace
 		line := strings.TrimSpace(raw)
-		// remove inline comment
 		if idx := strings.Index(line, "#"); idx >= 0 {
 			line = strings.TrimSpace(line[:idx])
 		}
-		// skip if empty after comment removal
 		if line == "" {
 			return client.HostInfo{}, nil
 		}
@@ -105,19 +102,16 @@ func main() {
 		password := ""
 		hostPort := line
 
-		// split out user@
 		if parts := strings.SplitN(hostPort, "@", 2); len(parts) == 2 {
 			user = parts[0]
 			hostPort = parts[1]
 		}
 
-		// split out ::password
 		if parts := strings.SplitN(hostPort, "::", 2); len(parts) == 2 {
 			hostPort = parts[0]
 			password = parts[1]
 		}
 
-		// split out :port
 		host := hostPort
 		if parts := strings.SplitN(hostPort, ":", 2); len(parts) == 2 {
 			host = parts[0]
@@ -131,7 +125,6 @@ func main() {
 		return client.HostInfo{User: user, Host: host, Port: port, Password: password}, nil
 	}
 
-	// build hosts slice
 	var hosts []client.HostInfo
 	if hostArg != "" {
 		hosts = append(hosts, client.HostInfo{
@@ -186,7 +179,7 @@ func main() {
 
 			mu.Lock()
 			defer mu.Unlock()
-			fmt.Printf("\n======================================\n")
+			fmt.Printf("======================================\n")
 			if err != nil {
 				fmt.Printf("------ Error with host %s -----\n", h.Host)
 				fmt.Printf("======================================\n%v\n", err)
