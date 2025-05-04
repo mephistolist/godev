@@ -2,7 +2,6 @@ package main
 
 import (
 	"bufio"
-	"flag"
 	"fmt"
 	"os"
 	"os/user"
@@ -15,6 +14,7 @@ import (
 
 	"golang.org/x/term"
 	"godev/client"
+	"github.com/spf13/pflag"
 )
 
 func main() {
@@ -23,29 +23,43 @@ func main() {
 	var timeoutSeconds int
 	var promptForPassword bool
 
+	// Custom usage function (clean output)
+	pflag.Usage = func() {
+		fmt.Fprintf(os.Stderr, `Usage of %s:
+  -f, --file string     File containing commands (default "commands.txt")
+  -h, --host string     Single IP address or hostname
+  -w, --password        Prompt for SSH password
+  -p, --port int        SSH port (default 22)
+  -s, --script string   Path to a script or binary to upload and execute
+  -t, --timeout int     Timeout in seconds for SSH connection (e.g., 10)
+  -u, --user string     SSH username
+`, os.Args[0])
+	}
+
+	// Manually handle --help and -h before parsing
+	for _, arg := range os.Args[1:] {
+	   if arg == "--help" {
+	      pflag.Usage()
+	      os.Exit(0)
+	   }	
+	}
+
+	// Define flags
+	pflag.StringVarP(&userArg, "user", "u", "", "SSH username")
+	pflag.StringVarP(&fileArg, "file", "f", "commands.txt", "File containing commands")
+	pflag.StringVarP(&hostArg, "host", "h", "", "Single IP address or hostname")
+	pflag.IntVarP(&timeoutSeconds, "timeout", "t", 0, "Timeout in seconds for SSH connection (e.g., 10)")
+	pflag.IntVarP(&portArg, "port", "p", 22, "SSH port")
+	pflag.BoolVarP(&promptForPassword, "password", "w", false, "Prompt for SSH password")
+	pflag.StringVarP(&scriptArg, "script", "s", "", "Path to a script or binary to upload and execute")
+	pflag.Parse()
+
 	homeDir, err := os.UserHomeDir()
 	if err != nil {
 		fmt.Println("Error getting home directory:", err)
 		return
 	}
 
-	flag.StringVar(&userArg, "user", "", "SSH username")
-	flag.StringVar(&fileArg, "file", "commands.txt", "File containing commands")
-	flag.StringVar(&hostArg, "host", "", "Single IP address or hostname")
-	flag.IntVar(&timeoutSeconds, "timeout", 0, "Timeout in seconds for SSH connection (e.g., 10)")
-	flag.IntVar(&portArg, "port", 22, "SSH port")
-	flag.BoolVar(&promptForPassword, "password", false, "Prompt for SSH password")
-	flag.StringVar(&scriptArg, "script", "", "Path to a script or binary to upload and execute")
-
-	// Allow -h as alias for -host
-	for i, arg := range os.Args {
-		if arg == "-h" && i+1 < len(os.Args) {
-			os.Args[i] = "-host"
-		}
-	}
-	flag.Parse()
-
-	// Validate the port number
 	if portArg < 1 || portArg > 65335 {
 		fmt.Println("Error: Port must be between 1 and 65335.")
 		return
@@ -93,7 +107,6 @@ func main() {
 		userArg = u.Username
 	}
 
-	// parseInventoryLine handles stripping inline comments and blank lines
 	parseInventoryLine := func(raw string, defUser string, defPort int) (client.HostInfo, error) {
 		line := strings.TrimSpace(raw)
 		if idx := strings.Index(line, "#"); idx >= 0 {
