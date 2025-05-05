@@ -3,7 +3,7 @@ A simple cross-platform devops project in Golang that's built for speed and cust
 
 $ godev --help<br>
 Usage of godev:<br>
-&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;-f, --file string       File containing commands (default "commands.txt")<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;-f, --file string       File containing commands (default "commands.txt")<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;-h, --host string       Single IP address or hostname<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;-i, --inventory string  Path to inventory file (must start with "inventory")<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;-w, --password          Prompt for SSH password<br>
