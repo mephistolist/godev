@@ -18,41 +18,48 @@ import (
 )
 
 func main() {
-	var userArg, passwordArg, fileArg, hostArg, scriptArg string
+	var userArg, passwordArg, fileArg, hostArg, scriptArg, inventoryArg string
 	var portArg int
 	var timeoutSeconds int
 	var promptForPassword bool
 
-	// Custom usage function (clean output)
+	// Custom usage function
 	pflag.Usage = func() {
 		fmt.Fprintf(os.Stderr, `Usage of %s:
-  -f, --file string     File containing commands (default "commands.txt")
-  -h, --host string     Single IP address or hostname
-  -w, --password        Prompt for SSH password
-  -p, --port int        SSH port (default 22)
-  -s, --script string   Path to a script or binary to upload and execute
-  -t, --timeout int     Timeout in seconds for SSH connection (e.g., 10)
-  -u, --user string     SSH username
+  -f, --file string       File containing commands (default "commands.txt")
+  -h, --host string       Single IP address or hostname
+  -i, --inventory string  Path to inventory file (must start with "inventory")
+  -w, --password          Prompt for SSH password
+  -p, --port int          SSH port (default 22)
+  -s, --script string     Path to a script or binary to upload and execute
+  -t, --timeout int       Timeout in seconds for SSH connection (e.g., 10)
+  -u, --user string       SSH username
 `, os.Args[0])
 	}
 
-	// Manually handle --help and -h before parsing
+	// Handle --help
 	for _, arg := range os.Args[1:] {
-	   if arg == "--help" {
-	      pflag.Usage()
-	      os.Exit(0)
-	   }	
+		if arg == "--help" {
+			pflag.Usage()
+			os.Exit(0)
+		}
 	}
 
-	// Define flags
 	pflag.StringVarP(&userArg, "user", "u", "", "SSH username")
 	pflag.StringVarP(&fileArg, "file", "f", "commands.txt", "File containing commands")
 	pflag.StringVarP(&hostArg, "host", "h", "", "Single IP address or hostname")
-	pflag.IntVarP(&timeoutSeconds, "timeout", "t", 0, "Timeout in seconds for SSH connection (e.g., 10)")
+	pflag.StringVarP(&inventoryArg, "inventory", "i", "inventory", "Path to inventory file")
+	pflag.IntVarP(&timeoutSeconds, "timeout", "t", 0, "Timeout in seconds for SSH connection")
 	pflag.IntVarP(&portArg, "port", "p", 22, "SSH port")
 	pflag.BoolVarP(&promptForPassword, "password", "w", false, "Prompt for SSH password")
 	pflag.StringVarP(&scriptArg, "script", "s", "", "Path to a script or binary to upload and execute")
 	pflag.Parse()
+
+	// Enforce that inventory file must start with "inventory"
+	if !strings.HasPrefix(filepath.Base(inventoryArg), "inventory") {
+		fmt.Printf("Error: Inventory file name must start with \"inventory\" (got: %q)\n", inventoryArg)
+		os.Exit(1)
+	}
 
 	homeDir, err := os.UserHomeDir()
 	if err != nil {
@@ -83,7 +90,7 @@ func main() {
 		passwordArg = string(p)
 	}
 
-	// If no password from CLI, ensure a key exists
+	// If no password, ensure usable SSH key exists
 	if passwordArg == "" {
 		ok := false
 		for _, fn := range []string{"id_rsa", "id_ed25519"} {
@@ -153,9 +160,9 @@ func main() {
 			Password: passwordArg,
 		})
 	} else {
-		f, err := os.Open("inventory")
+		f, err := os.Open(inventoryArg)
 		if err != nil {
-			fmt.Println("Error: inventory file not found and no -host provided.")
+			fmt.Printf("Error: inventory file %q not found and no -host provided.\n", inventoryArg)
 			return
 		}
 		defer f.Close()
