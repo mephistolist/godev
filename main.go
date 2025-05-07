@@ -19,30 +19,21 @@ import (
 
 func main() {
 	var userArg, passwordArg, fileArg, hostArg, scriptArg, inventoryArg string
-	var portArg int
-	var timeoutSeconds int
+	var portArg, timeoutSeconds, concurrency int
 	var promptForPassword bool
 
-	// Custom usage function
 	pflag.Usage = func() {
 		fmt.Fprintf(os.Stderr, `Usage of %s:
-  -f, --file string       File containing commands (default "commands.txt")
-  -h, --host string       Single IP address or hostname
-  -i, --inventory string  Path to inventory file (must start with "inventory")
-  -w, --password          Prompt for SSH password
-  -p, --port int          SSH port (default 22)
-  -s, --script string     Path to a script or binary to upload and execute
-  -t, --timeout int       Timeout in seconds for SSH connection (e.g., 10)
-  -u, --user string       SSH username
+  -f, --file string        File containing commands (default "commands.txt")
+  -h, --host string        Single IP address or hostname
+  -i, --inventory string   Path to inventory file (must start with "inventory")
+  -w, --password           Prompt for SSH password
+  -p, --port int           SSH port (default 22)
+  -s, --script string      Path to a script or binary to upload and execute
+  -t, --timeout int        Timeout in seconds for SSH connection (e.g., 10)
+  -u, --user string        SSH username
+  -c, --concurrency int    Number of concurrent SSH connections (default 5)
 `, os.Args[0])
-	}
-
-	// Handle --help
-	for _, arg := range os.Args[1:] {
-		if arg == "--help" {
-			pflag.Usage()
-			os.Exit(0)
-		}
 	}
 
 	pflag.StringVarP(&userArg, "user", "u", "", "SSH username")
@@ -53,44 +44,45 @@ func main() {
 	pflag.IntVarP(&portArg, "port", "p", 22, "SSH port")
 	pflag.BoolVarP(&promptForPassword, "password", "w", false, "Prompt for SSH password")
 	pflag.StringVarP(&scriptArg, "script", "s", "", "Path to a script or binary to upload and execute")
+	pflag.IntVarP(&concurrency, "concurrency", "c", 5, "Max concurrent SSH connections")
 	pflag.Parse()
 
-	// Enforce that inventory file must start with "inventory"
 	if !strings.HasPrefix(filepath.Base(inventoryArg), "inventory") {
-		fmt.Printf("Error: Inventory file name must start with \"inventory\" (got: %q)\n", inventoryArg)
+		fmt.Fprintf(os.Stderr, "Error: Inventory file must start with \"inventory\" (got: %q)\n", inventoryArg)
 		os.Exit(1)
 	}
 
 	homeDir, err := os.UserHomeDir()
 	if err != nil {
-		fmt.Println("Error getting home directory:", err)
+		fmt.Fprintln(os.Stderr, "Error getting home directory:", err)
 		return
 	}
 
+	// Optional: This could be used later in SSH clients for host verification
+	// knownHostsPath := filepath.Join(homeDir, ".ssh", "known_hosts")
+
 	if portArg < 1 || portArg > 65335 {
-		fmt.Println("Error: Port must be between 1 and 65335.")
+		fmt.Fprintln(os.Stderr, "Error: Port must be between 1 and 65335.")
 		return
 	}
 
 	if timeoutSeconds < 0 {
-		fmt.Println("Error: Timeout must be a positive integer.")
+		fmt.Fprintln(os.Stderr, "Error: Timeout must be a positive integer.")
 		return
 	}
 	timeout := time.Duration(timeoutSeconds) * time.Second
 
-	// Prompt for password if requested
 	if promptForPassword {
 		fmt.Print("Password: ")
 		p, err := term.ReadPassword(int(syscall.Stdin))
 		fmt.Println()
 		if err != nil {
-			fmt.Println("Error reading password:", err)
+			fmt.Fprintln(os.Stderr, "Error reading password:", err)
 			return
 		}
 		passwordArg = string(p)
 	}
 
-	// If no password, ensure usable SSH key exists
 	if passwordArg == "" {
 		ok := false
 		for _, fn := range []string{"id_rsa", "id_ed25519"} {
@@ -100,7 +92,7 @@ func main() {
 			}
 		}
 		if !ok {
-			fmt.Println("Error: No password provided and no usable private key found.")
+			fmt.Fprintln(os.Stderr, "Error: No password provided and no usable private key found.")
 			return
 		}
 	}
@@ -108,7 +100,7 @@ func main() {
 	if userArg == "" {
 		u, err := user.Current()
 		if err != nil {
-			fmt.Println("Error getting current user:", err)
+			fmt.Fprintln(os.Stderr, "Error getting current user:", err)
 			return
 		}
 		userArg = u.Username
@@ -162,31 +154,31 @@ func main() {
 	} else {
 		f, err := os.Open(inventoryArg)
 		if err != nil {
-			fmt.Printf("Error: inventory file %q not found and no -host provided.\n", inventoryArg)
+			fmt.Fprintf(os.Stderr, "Error: inventory file %q not found and no -host provided.\n", inventoryArg)
 			return
 		}
 		defer f.Close()
 
-		s := bufio.NewScanner(f)
-		for s.Scan() {
-			h, err := parseInventoryLine(s.Text(), userArg, portArg)
+		scanner := bufio.NewScanner(f)
+		for scanner.Scan() {
+			h, err := parseInventoryLine(scanner.Text(), userArg, portArg)
 			if err != nil {
-				fmt.Printf("Skipping invalid line: %s\n", err)
+				fmt.Fprintf(os.Stderr, "Skipping invalid line: %s\n", err)
 				continue
 			}
 			if h.Host != "" {
 				hosts = append(hosts, h)
 			}
 		}
-		if err := s.Err(); err != nil {
-			fmt.Println("Error reading inventory:", err)
+		if err := scanner.Err(); err != nil {
+			fmt.Fprintln(os.Stderr, "Error reading inventory:", err)
 			return
 		}
 	}
 
 	var wg sync.WaitGroup
 	var mu sync.Mutex
-	sem := make(chan struct{}, 5)
+	sem := make(chan struct{}, concurrency)
 
 	for _, h := range hosts {
 		wg.Add(1)
@@ -197,6 +189,7 @@ func main() {
 
 			var out string
 			var err error
+
 			if scriptArg != "" {
 				out, err = client.RunRemoteScript(h.User, h.Password, h.Host, h.Port, timeout, scriptArg)
 			} else {
@@ -205,10 +198,11 @@ func main() {
 
 			mu.Lock()
 			defer mu.Unlock()
+
 			fmt.Printf("======================================\n")
 			if err != nil {
-				fmt.Printf("------ Error with host %s -----\n", h.Host)
-				fmt.Printf("======================================\n%v\n", err)
+				fmt.Fprintf(os.Stderr, "------ Error with host %s -----\n", h.Host)
+				fmt.Fprintf(os.Stderr, "======================================\n%v\n", err)
 			} else {
 				fmt.Printf("----- Output from host %s -----\n", h.Host)
 				fmt.Printf("======================================\n\n%s\n", out)
