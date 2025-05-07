@@ -67,7 +67,7 @@ Works!
 ```
 You will probably noticed that we ran the program with the time command above and it is greatly faster than other popular DevOps software when running four different tasks across two hosts. If for whatever reason you need to slow this down, you can use the -t or --timeout option to add a pause in a number of seconds between hosts. Godev will always respect the order of commands in the commands.txt file, but it will not necessarily follow the order of hosts in the inventory file. If you need specific actions to happen on specific hosts in a certain order you can configure multiple inventory files and specify them with the -i or --inventory option. The only requirement here is that the file begins with the word "inventory" like inventory_web, inventory_linux, inventory_db, etc. 
 
-There is also another way to run code with the -s or --script option. Using this option we can rsync a script or binary to the /tmp folder of a host and execute it:
+There is also another way to run code with the -s or --script option. Using this option we can rsync a script or binary written in any language to the /tmp folder of a host and execute it:
 
 ```
 $ godev -s ./tests/hello
@@ -82,6 +82,7 @@ Hello GoDev!
 ======================================
 
 Hello GoDev!
+
 ```
 Of course this will differ slightly in Windows where sFTP is used in place of rsync, but it will accomplish the same goal. 
 
@@ -89,9 +90,19 @@ The only requirements before using on non-Windows hosts are that SSH and rsync b
 ```
 $ go build .
 ```
+From there you may copy the 'godev' binary from your current folder to /usr/bin or somewhere in PATH. If on Windows this will probably be C:\Windows\System32. To use -s or --script with Windows hosts you will also need to move to this directory and build the Wsync utility and copy it to your path as well:
+```
+$ cd client/WinSync/
+$ go build .
+$ sudo cp WinSync /usr/bin/
+```
+Or for more information on build options, see the INSTALL file.
+
+This should conclude any information one needs to know to configure and use this software in all its forms. The fact we have done this in 100 lines instead of 100 or more pages like other DevOps software should showcase that simplicity was a goal all along here. Should issues arise, please open an issue on this github, which can be found at https://github.com/mephistolist/godev.  
 
 # Todo
 Keep checking semgrep.<br>
 Refactor for performance.<br>
 Ponder making WinSync part of the rest of the code.<br>
-Create installer script and polish README.<br>
+Create INSTALL and polish README.<br>
+ installer 
