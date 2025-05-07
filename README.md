@@ -11,14 +11,14 @@ You can use --help for most of the usage.
 ```
 $ godev --help
 Usage of godev:
-&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;-f, --file string       File containing commands (default "commands.txt")
-&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;-h, --host string       Single IP address or hostname
-&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;-i, --inventory string  Path to inventory file (must start with "inventory")
-&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;-w, --password          Prompt for SSH password if not using keys
-&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;-p, --port int          SSH port (default 22)
-&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;-s, --script string     Path to a script or binary to upload and execute
-&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;-t, --timeout int       Timeout in seconds for SSH connection (e.g., 10)
-&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;-u, --user string       SSH username
+   -f, --file string       File containing commands (default "commands.txt")
+   -h, --host string       Single IP address or hostname
+   -i, --inventory string  Path to inventory file (must start with "inventory")
+   -w, --password          Prompt for SSH password if not using keys
+   -p, --port int          SSH port (default 22)
+   -s, --script string     Path to a script or binary to upload and execute
+   -t, --timeout int       Timeout in seconds for SSH connection (e.g., 10)
+   -u, --user string       SSH username
 ```
 Like any DevOps software, most won't see much value until you are using the software across multiple hosts. You can do this by configuring an inventory file which takes the following format:
 ```
