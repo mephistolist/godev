@@ -20,3 +20,5 @@ Or like this on a FreeBSD host with x86_64 CPU:
 $ GOARCH=amd64 GOOS=freebsd go build -ldflags "-s -w" -gcflags "-N -l" && strip ./godev
 
 Consult Golang's, your hardware's or your Operating System's documentation for specfying these types of specific builds on other enviroments. You may also use these steps when building the WinSync binary as well. 
+
+Please consult the README file for further configuration steps after building and installing this software.
