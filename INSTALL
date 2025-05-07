@@ -1,0 +1,22 @@
+As mentioned in the README file, considering you have golang installed, you can build and install this software on a non-Windows environment like so from this project's directory:
+
+$ go build .
+$ sudo cp godev /usr/bin/
+
+To work with Windows hosts, you will also need to do the following:
+
+$ cd client/WinSync/
+$ go build .
+$ sudo cp WinSync /usr/bin/
+
+If you are building from a Windows device, you will have similar steps, but you will have godev.exe and WinSync.exe. You will also need to copy these files to C:\Windows\System32 or some other location in your path.
+
+If you wish to squeeze out every inch of performance, you can build like this on a Linux host with a 64-bit Arm processor: 
+
+$ GOARCH=arm64 GOOS=linux go build -ldflags "-s -w" -gcflags "-N -l" && strip ./godev
+
+Or like this on a FreeBSD host with x86_64 CPU:
+
+$ GOARCH=amd64 GOOS=freebsd go build -ldflags "-s -w" -gcflags "-N -l" && strip ./godev
+
+Consult Golang's, your hardware's or your Operating System's documentation for specfying these types of specific builds on other enviroments. You may also use these steps when building the WinSync binary as well. 
