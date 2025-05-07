@@ -85,6 +85,11 @@ Hello GoDev!
 ```
 Of course this will differ slightly in Windows where sFTP is used in place of rsync, but it will accomplish the same goal. 
 
+The only requirements before using on non-Windows hosts are that SSH and rsync be installed and running. Windows 10 and above will only require openssh to be enabled as this will also enable sFTP in the process. To build this software, golang is installed and you can run the following from inside this project's directory:
+```
+$ go build .
+```
+
 # Todo
 Keep checking semgrep.<br>
 Refactor for performance.<br>
