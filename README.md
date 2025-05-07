@@ -39,11 +39,11 @@ $ time godev
 ----- Output from host 10.0.0.2 -----
 ======================================
 
-FreeBSD www1.teamsloth.net 14.2-RELEASE-p1 FreeBSD 14.2-RELEASE-p1 GENERIC amd64
+FreeBSD www1.example.com 14.2-RELEASE-p1 FreeBSD 14.2-RELEASE-p1 GENERIC amd64
 USER    PID %CPU %MEM   VSZ   RSS TT  STAT STARTED    TIME COMMAND
-ph33r 73683  0.0  0.3 24052 10640  -  SJ   02:42   0:00.02 sshd: ph33r@notty (sshd)
-ph33r 74970  0.0  0.1 14408  2768  -  SsJ  02:42   0:00.10 sh -c uname -a\nps fuax\nvmstat\necho Works!\n
-ph33r 77066  0.0  0.1 14480  2920  -  RJ   02:42   0:00.04 ps fuax
+user 73683  0.0  0.3 24052 10640  -  SJ   02:42   0:00.02 sshd: ph33r@notty (sshd)
+user 74970  0.0  0.1 14408  2768  -  SsJ  02:42   0:00.10 sh -c uname -a\nps fuax\nvmstat\necho Works!\n
+user 77066  0.0  0.1 14480  2920  -  RJ   02:42   0:00.04 ps fuax
  procs    memory    page                      disks       faults       cpu
  r  b  w  avm  fre  flt  re  pi  po   fr   sr ada0  cd0   in   sy   cs us sy id
  1  0  0 3305889792 3125170176   83   0   2   0   90   20    0    0   19  192  254  0  0 98
@@ -53,11 +53,11 @@ Works!
 ----- Output from host 10.0.0.3 -----
 ======================================
 
-FreeBSD www2.teamsloth.net 14.2-RELEASE-p1 FreeBSD 14.2-RELEASE-p1 GENERIC amd64
+FreeBSD www2.example.com 14.2-RELEASE-p1 FreeBSD 14.2-RELEASE-p1 GENERIC amd64
 USER    PID %CPU %MEM   VSZ   RSS TT  STAT STARTED    TIME COMMAND
-ph33r 74047  0.0  0.3 24052 10648  -  SJ   02:42   0:00.04 sshd: ph33r@notty (sshd)
-ph33r 75350  0.0  0.1 14408  2988  -  SsJ  02:42   0:00.09 sh -c uname -a\nps fuax\nvmstat\necho Works!\n
-ph33r 77416  0.0  0.1 14480  2924  -  RJ   02:42   0:00.05 ps fuax
+user 74047  0.0  0.3 24052 10648  -  SJ   02:42   0:00.04 sshd: ph33r@notty (sshd)
+user 75350  0.0  0.1 14408  2988  -  SsJ  02:42   0:00.09 sh -c uname -a\nps fuax\nvmstat\necho Works!\n
+user 77416  0.0  0.1 14480  2924  -  RJ   02:42   0:00.05 ps fuax
  procs    memory    page                      disks       faults       cpu
  r  b  w  avm  fre  flt  re  pi  po   fr   sr ada0  cd0   in   sy   cs us sy id
  0  0  0 3253927936 3127631872   83   0   2   0   91   20    0    0   19  192  254  0  0 98
@@ -65,7 +65,25 @@ Works!
 
         1.16 real         0.29 user         0.08 sys
 ```
-You will probably noticed that we ran the program with the time command above and it is greatly faster than other popular DevOps software. If for whatever reason you need to slow this down, you can use the -t or --timeout option to add a pause in a number of seconds between hosts. Godev will always respect the order of commands in the commands.txt file, but it will not necessarily follow the order of hosts in the inventory file. If you need specific actions to happen on specific hosts in a certain order you can configure multiple inventory files and specify them with the -i or --inventory option. The only requirement here is that the file begins with the word "inventory" like inventory_web, inventory_linux, inventory_db, etc. 
+You will probably noticed that we ran the program with the time command above and it is greatly faster than other popular DevOps software when running four different tasks across two hosts. If for whatever reason you need to slow this down, you can use the -t or --timeout option to add a pause in a number of seconds between hosts. Godev will always respect the order of commands in the commands.txt file, but it will not necessarily follow the order of hosts in the inventory file. If you need specific actions to happen on specific hosts in a certain order you can configure multiple inventory files and specify them with the -i or --inventory option. The only requirement here is that the file begins with the word "inventory" like inventory_web, inventory_linux, inventory_db, etc. 
+
+There is also another way to run code with the -s or --script option. Using this option we can rsync a script or binary to the /tmp folder of a host and execute it:
+
+```
+$ godev -s ./tests/hello
+======================================
+----- Output from host 10.0.0.3 -----
+======================================
+
+Hello GoDev!
+
+======================================
+----- Output from host 10.0.0.2 -----
+======================================
+
+Hello GoDev!
+```
+Of course this will differ slightly in Windows where sFTP is used in place of rsync, but it will accomplish the same goal. 
 
 # Todo
 Keep checking semgrep.<br>
