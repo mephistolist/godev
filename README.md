@@ -24,7 +24,7 @@ Like any DevOps software, most won't see much value until you are using the soft
 ```
 user@host:port::password
 ```
-However, if we are executing this program with the same user we logging into the host with, SSH uses keys instead of passwords and SSH is on port 22, we could just use the host and nothing else on a line. Once we have configured the inventory file in our current directory we have two options to run code or commands on the hosts we configured. One is to place a commands.txt file in our current directory too including shell commands:
+However, if we are executing this program with the same user we logging into the host with, SSH uses keys instead of passwords and SSH is on port 22, we could just use the host and nothing else on a line. Once we have configured the inventory file in our current directory we have two options to run code or commands on the hosts we configured. One is to place a commands.txt file in our current directory too including shell commands, or we can use any file or location with the -f or --file option:
 ```
 $ cat commands.txt 
 uname -a
@@ -98,10 +98,13 @@ $ sudo cp WinSync /usr/bin/
 ```
 Or for more information on build options, see the INSTALL file.
 
-This should conclude any information one needs to know to configure and use this software in all its forms. The fact we have done this in 100 lines instead of 100 or more pages like other DevOps software should showcase that simplicity was a goal all along here. Should issues arise, please open an issue on this github, which can be found at https://github.com/mephistolist/godev.  
+This should conclude any information one needs to know to configure and use this software in all its forms. The fact we have done this in little over 100 lines instead of 100 or more pages like other DevOps software should showcase that simplicity was a goal all along here. Should issues arise, please open an issue on this github, which can be found at here: 
+
+https://github.com/mephistolist/godev  
 
 # Todo
 Keep checking semgrep.<br>
 Refactor for performance.<br>
 Ponder making WinSync part of the rest of the code.<br>
-Create INSTALL and polish README.<br>
+Polish README.<br>
+Add error message if no hosts are configured.
