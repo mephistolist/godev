@@ -22,9 +22,9 @@ Usage of godev:
 ```
 Like any DevOps software, most won't see much value until you are using the software across multiple hosts. You can do this by configuring an inventory file which takes the following format:
 ```
-user@host:port::password
+user@host:port::password:::sudoPassword
 ```
-However, if we are executing this program with the same user we logging into the host with, SSH uses keys instead of passwords and SSH is on port 22, we could just use the host and nothing else on a line. Once we have configured the inventory file in our current directory we have two options to run code or commands on the hosts we configured. One is to place a commands.txt file in our current directory too including shell commands, or we can use any file or location with the -f or --file option:
+However, if we are executing this program with the same user we logging into the host with, SSH uses keys instead of passwords and SSH is on port 22, and don't need sudo, we could just use the host with nothing else on a line. Once we have configured the inventory file in our current directory we have two options to run code or commands on the hosts we configured. One is to place a commands.txt file in our current directory too including shell commands, or we can use any file or location with the -f or --file option:
 ```
 $ cat commands.txt 
 uname -a
@@ -102,16 +102,11 @@ Lastly, if you need to run a command in commands.txt with sudo and a password, y
 ```
 echo "P@55w0rd" | sudo -S whoami
 ```
-If you need to run an entire script or binary as root, this is a two step process. First copy the script or binary in question to the /tmp folder in the remote hosts like you would by running it as a normal user:
+If you need to run an entire script or binary as root, you may just add the sudo password in your inventory file to use with the -s option. Or if no password is used with sudo, you can run it as a normal user to copy it to the /tmp folder on a remote server. Then add something the following to commands.txt and run it this way:
 ```
-$ godev -s ./test.sh
+sudo /tmp/my_super_script.sh
 ```
-Then we can just add a line to commands.txt like the following to execute that code with a sudo password on any remote hosts:
-```
-echo "P@55w0rd" | sudo -S /tmp/test.sh
-```
-
-This should conclude any information one needs to know to configure and use this software in all its forms. The fact we have done this in little over 100 lines instead of 100 or more pages like other DevOps software should showcase that simplicity was a goal all along here. Should issues arise, please open an issue on this github, which can be found at here: 
+This should conclude any information one needs to know to configure and use this software in all its forms. The fact we have done this in little over 100 lines instead of 100 or more pages like other DevOps software should showcase that simplicity was a goal all along here. Should issues arise, please open an issue on the following github:
 
 https://github.com/mephistolist/godev  
 
@@ -120,4 +115,3 @@ Keep checking semgrep.<br>
 Refactor for performance.<br>
 Ponder making WinSync part of the rest of the code.<br>
 Polish README.<br>
-Add error message if no hosts are configured.
