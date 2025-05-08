@@ -41,7 +41,7 @@ $ time godev
 
 FreeBSD www1.example.com 14.2-RELEASE-p1 FreeBSD 14.2-RELEASE-p1 GENERIC amd64
 USER    PID %CPU %MEM   VSZ   RSS TT  STAT STARTED    TIME COMMAND
-user 73683  0.0  0.3 24052 10640  -  SJ   02:42   0:00.02 sshd: ph33r@notty (sshd)
+user 73683  0.0  0.3 24052 10640  -  SJ   02:42   0:00.02 sshd: user@notty (sshd)
 user 74970  0.0  0.1 14408  2768  -  SsJ  02:42   0:00.10 sh -c uname -a\nps fuax\nvmstat\necho Works!\n
 user 77066  0.0  0.1 14480  2920  -  RJ   02:42   0:00.04 ps fuax
  procs    memory    page                      disks       faults       cpu
@@ -55,7 +55,7 @@ Works!
 
 FreeBSD www2.example.com 14.2-RELEASE-p1 FreeBSD 14.2-RELEASE-p1 GENERIC amd64
 USER    PID %CPU %MEM   VSZ   RSS TT  STAT STARTED    TIME COMMAND
-user 74047  0.0  0.3 24052 10648  -  SJ   02:42   0:00.04 sshd: ph33r@notty (sshd)
+user 74047  0.0  0.3 24052 10648  -  SJ   02:42   0:00.04 sshd: user@notty (sshd)
 user 75350  0.0  0.1 14408  2988  -  SsJ  02:42   0:00.09 sh -c uname -a\nps fuax\nvmstat\necho Works!\n
 user 77416  0.0  0.1 14480  2924  -  RJ   02:42   0:00.05 ps fuax
  procs    memory    page                      disks       faults       cpu
