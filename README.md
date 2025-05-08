@@ -98,6 +98,19 @@ $ sudo cp WinSync /usr/bin/
 ```
 Or for more information on build options, see the INSTALL file.
 
+Lastly, if you need to run a command in commands.txt with sudo and a password, you can something like the following:
+```
+echo "P@55w0rd" | sudo -S whoami
+```
+If you need to run an entire script or binary as root, this is a two step process. First copy the script or binary in question to the /tmp folder in the remote hosts like you would by running it as a normal user:
+```
+$ godev -s ./test.sh
+```
+Then we can just add a line to commands.txt like the following to execute that code with a sudo password on any remote hosts:
+```
+echo "P@55w0rd" | sudo -S /tmp/test.sh
+```
+
 This should conclude any information one needs to know to configure and use this software in all its forms. The fact we have done this in little over 100 lines instead of 100 or more pages like other DevOps software should showcase that simplicity was a goal all along here. Should issues arise, please open an issue on this github, which can be found at here: 
 
 https://github.com/mephistolist/godev  
