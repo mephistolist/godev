@@ -76,6 +76,19 @@ func main() {
 	pflag.IntVarP(&concurrency, "concurrency", "c", 5, "Max concurrent SSH connections")
 	pflag.Parse()
 
+	fileUsed := pflag.Lookup("file").Changed
+	scriptUsed := pflag.Lookup("script").Changed
+
+	if fileUsed && scriptUsed {
+		fmt.Fprintln(os.Stderr, "Error: Cannot use both -f/--file and -s/--script at the same time.")
+		os.Exit(1)
+	}
+
+	if !fileUsed && !scriptUsed {
+		fmt.Fprintln(os.Stderr, "Error: Either --file or --script must be provided.")
+		os.Exit(1)
+	}
+
 	if !strings.HasPrefix(filepath.Base(inventoryArg), "inventory") {
 		fmt.Fprintf(os.Stderr, "Error: Inventory file must start with \"inventory\" (got: %q)\n", inventoryArg)
 		os.Exit(1)
@@ -83,18 +96,18 @@ func main() {
 
 	if portArg < 1 || portArg > 65335 {
 		fmt.Fprintln(os.Stderr, "Error: Port must be between 1 and 65335.")
-		return
+		os.Exit(1)
 	}
 	if timeoutSeconds < 0 {
 		fmt.Fprintln(os.Stderr, "Error: Timeout must be a positive integer.")
-		return
+		os.Exit(1)
 	}
 	timeout := time.Duration(timeoutSeconds) * time.Second
 
 	homeDir, err := os.UserHomeDir()
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "Error getting home directory:", err)
-		return
+		os.Exit(1)
 	}
 
 	if promptForPassword {
@@ -103,7 +116,7 @@ func main() {
 		fmt.Println()
 		if err != nil {
 			fmt.Fprintln(os.Stderr, "Error reading password:", err)
-			return
+			os.Exit(1)
 		}
 		passwordArg = string(p)
 	}
@@ -118,7 +131,7 @@ func main() {
 		}
 		if !found {
 			fmt.Fprintln(os.Stderr, "Error: No password provided and no usable private key found.")
-			return
+			os.Exit(1)
 		}
 	}
 
@@ -126,7 +139,7 @@ func main() {
 		u, err := user.Current()
 		if err != nil {
 			fmt.Fprintln(os.Stderr, "Error getting current user:", err)
-			return
+			os.Exit(1)
 		}
 		userArg = u.Username
 	}
@@ -144,7 +157,7 @@ func main() {
 		f, err := os.Open(inventoryArg)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Error: inventory file %q not found and no -host provided.\n", inventoryArg)
-			return
+			os.Exit(1)
 		}
 		defer f.Close()
 
@@ -161,13 +174,13 @@ func main() {
 		}
 		if err := scanner.Err(); err != nil {
 			fmt.Fprintln(os.Stderr, "Error reading inventory:", err)
-			return
+			os.Exit(1)
 		}
 	}
 
 	if len(hosts) == 0 {
 		fmt.Fprintln(os.Stderr, "Error: No valid hosts found in inventory file or supplied with the -host option.")
-		return
+		os.Exit(1)
 	}
 
 	var wg sync.WaitGroup
@@ -183,7 +196,7 @@ func main() {
 
 			var out string
 			var err error
-			if scriptArg != "" {
+			if scriptUsed {
 				out, err = client.RunRemoteScriptWithSudo(h.User, h.Password, h.SudoPassword, h.Host, h.Port, timeout, scriptArg)
 			} else {
 				out, err = client.Run(h.User, h.Password, fileArg, h.Host, h.Port, timeout)
