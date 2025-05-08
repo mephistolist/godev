@@ -116,4 +116,3 @@ Refactor for performance.<br>
 Ponder making WinSync part of the rest of the code.<br>
 Polish README.<br>
 Finish escaping reserved characters in passwords.<br>
-Ensure -f and -s can both be given at the same time without error.
