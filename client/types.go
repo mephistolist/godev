@@ -5,6 +5,7 @@ type HostInfo struct {
 	Host string
 	Port int
 	Password string
+	SudoPassword string
 }
 
 type Result struct {
