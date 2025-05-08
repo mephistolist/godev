@@ -191,17 +191,18 @@ func main() {
 
 			mu.Lock()
 			defer mu.Unlock()
-
-			fmt.Println("======================================")
-			fmt.Printf("----- Output from host %s -----\n", h.Host)
-			fmt.Println("======================================\n")
+			fmt.Printf("======================================\n")
 			if err != nil {
-				fmt.Fprintf(os.Stderr, "Error:\n%v\n\n", err)
+				fmt.Printf("------ Error with host %s -----\n", h.Host)
+				fmt.Printf("======================================\n\n%v\n", err)
 			} else {
-				fmt.Println(out)
+				fmt.Printf("----- Output from host %s -----\n", h.Host)
+				fmt.Printf("======================================\n\n%s\n", out)
+			}
+			if timeout > 0 {
+				time.Sleep(timeout)
 			}
 		}(h)
 	}
-
 	wg.Wait()
 }
