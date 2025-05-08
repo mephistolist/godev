@@ -115,3 +115,4 @@ Keep checking semgrep.<br>
 Refactor for performance.<br>
 Ponder making WinSync part of the rest of the code.<br>
 Polish README.<br>
+Finish escaping reserved characters in passwords.
