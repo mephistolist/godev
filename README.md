@@ -24,6 +24,10 @@ Like any DevOps software, most won't see much value until you are using the soft
 ```
 user@host:port::password:::sudoPassword
 ```
+Like most configuration files the '#' character can be used for comments. Should you have an SSH password, or a sudo password that contains '#', ':', '@' you can escape them with the '\' character. Or if a backslash is used, you can use '\\' to denote a single backslash. Should you have an SSH password like ':@::#:::\', you can escape it like so in an inventory file:
+```
+10.0.0.3::\:\@\:\:\#\:\:\:\\
+```
 However, if we are executing this program with the same user we logging into the host with, SSH uses keys instead of passwords and SSH is on port 22, and don't need sudo, we could just use the host with nothing else on a line. Once we have configured the inventory file in our current directory we have two options to run code or commands on the hosts we configured. One is to place a commands.txt file in our current directory too including shell commands, or we can use any file or location with the -f or --file option:
 ```
 $ cat commands.txt 
