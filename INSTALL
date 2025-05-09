@@ -3,12 +3,6 @@ As mentioned in the README file, considering you have golang installed, you can 
 $ go build .
 $ sudo cp godev /usr/bin/
 
-To work with Windows hosts, you will also need to do the following:
-
-$ cd client/WinSync/
-$ go build .
-$ sudo cp WinSync /usr/bin/
-
 If you are building from a Windows device, you will have similar steps, but you will have godev.exe and WinSync.exe. You will also need to copy these files to C:\Windows\System32 or some other location in your path.
 
 If you wish to squeeze out every inch of performance, you can build like this on a Linux host with a 64-bit Arm processor: 
