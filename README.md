@@ -119,3 +119,5 @@ Keep checking semgrep.<br>
 Refactor for performance.<br>
 Ponder making WinSync part of the rest of the code.<br>
 Polish README.<br>
+Debate if escaping the commands.txt file is worth it.<br> 
+Lock down -f to only use files ending in .txt
