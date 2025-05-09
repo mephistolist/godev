@@ -28,7 +28,7 @@ Like most configuration files the '#' character can be used for comments. Should
 ```
 10.0.0.3::\:\@\:\:\#\:\:\:\\
 ```
-However, if we are executing this program with the same user we logging into the host with, SSH uses keys instead of passwords and SSH is on port 22, and don't need sudo, we could just use the host with nothing else on a line. Once we have configured the inventory file in our current directory we have two options to run code or commands on the hosts we configured. One is to place a commands.txt file in our current directory too including shell commands, or we can use any file or location with the -f or --file option:
+However, if we are executing this program with the same user we logging into the host with, SSH uses keys instead of passwords and SSH is on port 22, and don't need sudo, we could just use the host with nothing else on a line. Once we have configured the inventory file in our current directory we have two options to run code or commands on the hosts we configured. One is to use a .txt file, like commands.txt to include shell commands which we can call from any location with the -f or --file option:
 ```
 $ cat commands.txt 
 uname -a
@@ -38,7 +38,7 @@ echo Works!
 ```
 If we have configured both the inventory and commands.txt file correctly, you can run it from the directory:
 ```
-$ time godev
+$ time godev -f /home/user/commands.txt
 ======================================
 ----- Output from host 10.0.0.2 -----
 ======================================
