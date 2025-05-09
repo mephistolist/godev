@@ -119,7 +119,7 @@ func parseInventoryLine(raw string, defUser string, defPort int) (client.HostInf
 
 func main() {
 	var userArg, passwordArg, fileArg, hostArg, scriptArg, inventoryArg string
-	var portArg, timeoutSeconds, concurrency int
+	var portArg, timeoutSeconds int
 	var promptForPassword bool
 
 	pflag.StringVarP(&userArg, "user", "u", "", "SSH username")
@@ -130,7 +130,6 @@ func main() {
 	pflag.IntVarP(&portArg, "port", "p", 22, "SSH port")
 	pflag.BoolVarP(&promptForPassword, "password", "w", false, "Prompt for SSH password")
 	pflag.StringVarP(&scriptArg, "script", "s", "", "Path to a script or binary to upload and execute")
-	pflag.IntVarP(&concurrency, "concurrency", "c", 5, "Max concurrent SSH connections")
 
 	pflag.Usage = func() {
 		fmt.Fprintf(os.Stderr, "Usage of %s:\n", os.Args[0])
@@ -249,9 +248,11 @@ func main() {
 
 	var wg sync.WaitGroup
 	var mu sync.Mutex
-	sem := make(chan struct{}, concurrency)
 
-	for _, h := range hosts {
+	const concurrencyLimit = 5
+	sem := make(chan struct{}, concurrencyLimit)
+
+		for _, h := range hosts {
 		wg.Add(1)
 		go func(h client.HostInfo) {
 			defer wg.Done()
@@ -261,7 +262,12 @@ func main() {
 			var out string
 			var err error
 			if scriptUsed {
-				out, err = client.RunRemoteScriptWithSudo(h.User, h.Password, h.SudoPassword, h.Host, h.Port, timeout, scriptArg)
+				// 🔧 This part checks if a sudo password was provided and acts accordingly.
+				if strings.TrimSpace(h.SudoPassword) == "" {
+					out, err = client.RunRemoteScriptWithSudo(h.User, h.Password, "", h.Host, h.Port, timeout, scriptArg)
+				} else {
+					out, err = client.RunRemoteScriptWithSudo(h.User, h.Password, h.SudoPassword, h.Host, h.Port, timeout, scriptArg)
+				}
 			} else {
 				out, err = client.Run(h.User, h.Password, fileArg, h.Host, h.Port, timeout)
 			}
