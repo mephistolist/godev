@@ -94,13 +94,7 @@ The only requirements before using on non-Windows hosts are that SSH and rsync b
 ```
 $ go build .
 ```
-From there you may copy the 'godev' binary from your current folder to /usr/bin or somewhere in PATH. If on Windows this will probably be C:\Windows\System32. To use -s or --script with Windows hosts you will also need to move to this directory and build the Wsync utility and copy it to your path as well:
-```
-$ cd client/WinSync/
-$ go build .
-$ sudo cp WinSync /usr/bin/
-```
-Or for more information on build options, see the INSTALL file.
+From there you may copy the 'godev' binary from your current folder to /usr/bin or somewhere in PATH. If on Windows this will probably be C:\Windows\System32. For more information on build options, see the INSTALL file.
 
 Lastly, if you need to run a command in commands.txt with sudo and a password, you can something like the following:
 ```
