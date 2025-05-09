@@ -148,6 +148,11 @@ func main() {
 		os.Exit(1)
 	}
 
+	if fileUsed && filepath.Ext(fileArg) != ".txt" {
+		fmt.Fprintln(os.Stderr, "Error: Only .txt files are allowed with the --file option.")
+		os.Exit(1)
+	}
+
 	if !strings.HasPrefix(filepath.Base(inventoryArg), "inventory") {
 		fmt.Fprintf(os.Stderr, "Error: Inventory file must start with \"inventory\" (got: %q)\n", inventoryArg)
 		os.Exit(1)
