@@ -17,47 +17,110 @@ import (
 	"github.com/spf13/pflag"
 )
 
+// Split a string on a separator (like "::") but ignore escaped versions (e.g., "\::")
+func splitUnescaped(s string, sep string) []string {
+	var parts []string
+	var curr strings.Builder
+	escaped := false
+	i := 0
+	for i < len(s) {
+		if s[i] == '\\' && !escaped {
+			escaped = true
+			i++
+			continue
+		}
+		if !escaped && strings.HasPrefix(s[i:], sep) {
+			parts = append(parts, curr.String())
+			curr.Reset()
+			i += len(sep)
+			continue
+		}
+		if escaped {
+			curr.WriteByte('\\') // Preserve the backslash if not followed by special char
+			escaped = false
+		}
+		curr.WriteByte(s[i])
+		i++
+	}
+	parts = append(parts, curr.String())
+	return parts
+}
+
+func unescapeField(s string) string {
+	replacer := strings.NewReplacer(
+		`\\`, `\`,
+		`\@`, `@`,
+		`\:`, `:`,
+		`\#`, `#`,
+	)
+	return replacer.Replace(s)
+}
+
 func parseInventoryLine(raw string, defUser string, defPort int) (client.HostInfo, error) {
 	line := strings.TrimSpace(raw)
-	if idx := strings.Index(line, "#"); idx >= 0 {
-		line = strings.TrimSpace(line[:idx])
+
+	// Remove comments not escaped
+	commentIndex := -1
+	inEscape := false
+	for i := 0; i < len(line); i++ {
+		if line[i] == '\\' {
+			inEscape = !inEscape
+		} else {
+			if line[i] == '#' && !inEscape {
+				commentIndex = i
+				break
+			}
+			inEscape = false
+		}
+	}
+	if commentIndex >= 0 {
+		line = strings.TrimSpace(line[:commentIndex])
 	}
 	if line == "" {
 		return client.HostInfo{}, nil
 	}
 
-	user := defUser
-	port := defPort
-	password := ""
-	sudoPassword := ""
-	hostPort := line
+	info := client.HostInfo{
+		User: defUser,
+		Port: defPort,
+	}
 
-	if parts := strings.SplitN(hostPort, ":::", 2); len(parts) == 2 {
-		hostPort, sudoPassword = parts[0], parts[1]
+	// Process ::: first (sudo password)
+	parts := splitUnescaped(line, ":::")
+	if len(parts) == 2 {
+		line = parts[0]
+		info.SudoPassword = unescapeField(parts[1])
 	}
-	if parts := strings.SplitN(hostPort, "::", 2); len(parts) == 2 {
-		hostPort, password = parts[0], parts[1]
+
+	// Then process :: (SSH password)
+	parts = splitUnescaped(line, "::")
+	if len(parts) == 2 {
+		line = parts[0]
+		info.Password = unescapeField(parts[1])
 	}
-	if parts := strings.SplitN(hostPort, "@", 2); len(parts) == 2 {
-		user, hostPort = parts[0], parts[1]
+
+	// Then process user@host
+	parts = splitUnescaped(line, "@")
+	if len(parts) == 2 {
+		info.User = unescapeField(parts[0])
+		line = parts[1]
 	}
-	host := hostPort
-	if parts := strings.SplitN(hostPort, ":", 2); len(parts) == 2 {
-		host = parts[0]
-		if p, err := strconv.Atoi(parts[1]); err == nil {
-			port = p
+
+	// Then process host:port
+	parts = splitUnescaped(line, ":")
+	if len(parts) == 2 {
+		info.Host = unescapeField(parts[0])
+		portStr := unescapeField(parts[1])
+		if p, err := strconv.Atoi(portStr); err == nil {
+			info.Port = p
 		} else {
 			return client.HostInfo{}, fmt.Errorf("invalid port in line %q", raw)
 		}
+	} else {
+		info.Host = unescapeField(line)
 	}
 
-	return client.HostInfo{
-		User:         user,
-		Host:         host,
-		Port:         port,
-		Password:     password,
-		SudoPassword: sudoPassword,
-	}, nil
+	return info, nil
 }
 
 func main() {
