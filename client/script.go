@@ -1,185 +1,262 @@
 package client
 
 import (
-	"bytes"
-	"fmt"
-	"io"
-	"net"
-	"os"
-	"os/exec"
-	"path/filepath"
-	"strings"
-	"time"
+    "bytes"
+    "fmt"
+    "io"
+    "net"
+    "os"
+    "os/exec"
+    "path/filepath"
+    "strings"
+    "time"
 
-	"github.com/pkg/sftp"
-	"golang.org/x/crypto/ssh"
-	"golang.org/x/crypto/ssh/agent"
+    "github.com/pkg/sftp"
+    "golang.org/x/crypto/ssh"
+    "golang.org/x/crypto/ssh/agent"
 )
 
-// Checks if rsync is available on the remote host
-func CheckRsync(user, password, host string, port int, timeout time.Duration) error {
-	_, err := RunCommand(user, password, host, port, timeout, "true") // dummy command
-	if err != nil {
-		return err
-	}
+// dialSSH establishes an SSH connection (client only).
+func dialSSH(user, password, host string, port int, timeout time.Duration) (*ssh.Client, error) {
+    var methods []ssh.AuthMethod
 
-	cmd := "which rsync"
-	out, err := RunCommand(user, password, host, port, timeout, cmd)
-	if err != nil || out == "" {
-		return fmt.Errorf("rsync not found on host %s", host)
-	}
+    if sock := os.Getenv("SSH_AUTH_SOCK"); sock != "" {
+        if c, err := net.Dial("unix", sock); err == nil {
+            methods = append(methods, ssh.PublicKeysCallback(agent.NewClient(c).Signers))
+        }
+    }
+    if strings.TrimSpace(password) != "" {
+        methods = append(methods, ssh.Password(password))
+    }
+    if len(methods) == 0 {
+        return nil, fmt.Errorf("no authentication methods available")
+    }
 
-	return nil
+    cfg := &ssh.ClientConfig{
+        User:            user,
+        Auth:            methods,
+        HostKeyCallback: ssh.InsecureIgnoreHostKey(),
+        Timeout:         timeout,
+    }
+    addr := fmt.Sprintf("%s:%d", host, port)
+    return ssh.Dial("tcp", addr, cfg)
 }
 
-// Rsync a file to the remote host
-func RsyncScript(user, password, host string, port int, localPath string) error {
-	cmd := exec.Command("rsync", "-e", fmt.Sprintf("ssh -p %d", port), localPath, fmt.Sprintf("%s@%s:/tmp/", user, host))
-	var stderr bytes.Buffer
-	cmd.Stderr = &stderr
-	err := cmd.Run()
-	if err != nil {
-		return fmt.Errorf("rsync error: %s", stderr.String())
-	}
-	return nil
+// runSSH runs a command over SSH and returns its stdout.
+func runSSH(user, password, host string, port int, timeout time.Duration, cmd string) (string, error) {
+    conn, err := dialSSH(user, password, host, port, timeout)
+    if err != nil {
+        return "", err
+    }
+    defer conn.Close()
+
+    session, err := conn.NewSession()
+    if err != nil {
+        return "", fmt.Errorf("new session: %v", err)
+    }
+    defer session.Close()
+
+    var out, errbuf bytes.Buffer
+    session.Stdout = &out
+    session.Stderr = &errbuf
+
+    if err := session.Run(cmd); err != nil {
+        return "", fmt.Errorf("ssh error: %v, stderr: %s", err, errbuf.String())
+    }
+    return out.String(), nil
 }
 
-// Run a remote script (Unix-like hosts)
+// tryUpload first attempts rsync; on failure (e.g. Windows), falls back to SFTP.
+func tryUpload(user, password, host string, port int, localPath, remotePath string, timeout time.Duration) error {
+    rsync := exec.Command("rsync", "-e", fmt.Sprintf("ssh -p %d", port), localPath, fmt.Sprintf("%s@%s:%s", user, host, remotePath))
+    if err := rsync.Run(); err == nil {
+        return nil
+    }
+    // fallback to SFTP
+    return sftpUpload(user, password, host, port, timeout, localPath, remotePath)
+}
+
+// sftpUpload pushes a file via the SFTP subsystem.
+func sftpUpload(user, password, host string, port int, timeout time.Duration, localPath, remotePath string) error {
+    conn, err := dialSSH(user, password, host, port, timeout)
+    if err != nil {
+        return err
+    }
+    defer conn.Close()
+
+    client, err := sftp.NewClient(conn)
+    if err != nil {
+        return fmt.Errorf("start sftp: %v", err)
+    }
+    defer client.Close()
+
+    dst, err := client.Create(remotePath)
+    if err != nil {
+        return fmt.Errorf("create remote file: %v", err)
+    }
+    defer dst.Close()
+
+    src, err := os.Open(localPath)
+    if err != nil {
+        return fmt.Errorf("open local file: %v", err)
+    }
+    defer src.Close()
+
+    if _, err := io.Copy(dst, src); err != nil {
+        return fmt.Errorf("copy file: %v", err)
+    }
+    return nil
+}
+
+// RunRemoteScript uploads and runs a Unix-style script (.sh, no extension, etc).
 func RunRemoteScript(user, password, host string, port int, timeout time.Duration, scriptPath string) (string, error) {
-	scriptName := filepath.Base(scriptPath)
-	remoteScript := "/tmp/" + scriptName
+    scriptName := filepath.Base(scriptPath)
+    remote := "/tmp/" + scriptName
+    ext := strings.ToLower(filepath.Ext(scriptName))
 
-	if err := RsyncScript(user, password, host, port, scriptPath); err != nil {
-		return "", err
-	}
+    if err := tryUpload(user, password, host, port, scriptPath, remote, timeout); err != nil {
+        return "", err
+    }
 
-	cmd := fmt.Sprintf("chmod +x %s && %s", remoteScript, remoteScript)
-	return RunCommand(user, password, host, port, timeout, cmd)
+    if ext != ".bat" && ext != ".ps1" {
+        if _, err := runSSH(user, password, host, port, timeout, fmt.Sprintf("chmod +x %s", remote)); err != nil {
+            return "", fmt.Errorf("chmod failed: %v", err)
+        }
+    }
+
+    return runSSH(user, password, host, port, timeout, remote)
 }
 
-// Run remote script with sudo
-func RunRemoteScriptWithSudo(user, sshPassword, sudoPassword, host string, port int, timeout time.Duration, scriptPath string) (string, error) {
-	scriptName := filepath.Base(scriptPath)
-	remoteScript := "/tmp/" + scriptName
+// runSSHWithPTYAndStdin requests a PTY, then runs cmd feeding stdin, and hides sudo prompt.
+func runSSHWithPTYAndStdin(
+    user, password, host string,
+    port int, timeout time.Duration,
+    cmd, stdin string,
+) (string, error) {
+    conn, err := dialSSH(user, password, host, port, timeout)
+    if err != nil {
+        return "", err
+    }
+    defer conn.Close()
 
-	if err := RsyncScript(user, sshPassword, host, port, scriptPath); err != nil {
-		return "", err
-	}
+    session, err := conn.NewSession()
+    if err != nil {
+        return "", fmt.Errorf("new session: %v", err)
+    }
+    defer session.Close()
 
-	chmodCmd := fmt.Sprintf("chmod +x %s", remoteScript)
-	if _, err := RunCommand(user, sshPassword, host, port, timeout, chmodCmd); err != nil {
-		return "", fmt.Errorf("chmod failed: %v", err)
-	}
+    // request PTY so sudo can run
+    if err := session.RequestPty("xterm", 80, 40, ssh.TerminalModes{}); err != nil {
+        return "", fmt.Errorf("request pty failed: %v", err)
+    }
 
-	var cmd string
-	if sudoPassword != "" {
-		cmd = fmt.Sprintf("echo %q | sudo -S %s", sudoPassword, remoteScript)
-	} else {
-		cmd = remoteScript
-	}
+    var stdout bytes.Buffer
+    var stderr bytes.Buffer
 
-	return RunCommand(user, sshPassword, host, port, timeout, cmd)
+    session.Stdout = &stdout
+    session.Stderr = &stderr
+
+    // use a pipe to feed password silently
+    stdinPipe, err := session.StdinPipe()
+    if err != nil {
+        return "", fmt.Errorf("stdin pipe: %v", err)
+    }
+
+    // run the command
+    if err := session.Start(cmd); err != nil {
+        return "", fmt.Errorf("ssh start error: %v", err)
+    }
+
+    // write sudo password (ends with newline)
+    io.WriteString(stdinPipe, stdin)
+
+    // wait for command to finish
+    if err := session.Wait(); err != nil {
+        // if command failed, you might want stderr in the message
+        return "", fmt.Errorf("ssh error: %v, stderr: %s", err, stderr.String())
+    }
+
+    // suppress sudo password prompt line in stderr
+    cleaned := strings.ReplaceAll(stdout.String(), stdin, "")
+    return strings.TrimSpace(cleaned), nil
 }
 
-// Windows-specific remote script execution (integrated from WinSync)
+// runSSHWithPTYAndStdin requests a PTY, then runs cmd feeding stdin.
+func RunRemoteScriptWithSudo(
+    user, sshPass, sudoPass, host string,
+    port int,
+    timeout time.Duration,
+    scriptPath string,
+) (string, error) {
+    scriptName := filepath.Base(scriptPath)
+    remote := "/tmp/" + scriptName
+    ext := strings.ToLower(filepath.Ext(scriptName))
+
+    // upload (rsync→SFTP)
+    if err := tryUpload(user, sshPass, host, port, scriptPath, remote, timeout); err != nil {
+        return "", err
+    }
+
+    // make executable on Unix‑style hosts
+    if ext != ".bat" && ext != ".ps1" {
+        if _, err := runSSH(user, sshPass, host, port, timeout,
+            fmt.Sprintf("chmod +x %s", remote),
+        ); err != nil {
+            return "", fmt.Errorf("chmod failed: %v", err)
+        }
+    }
+
+    // if no sudo password, just run it
+    if strings.TrimSpace(sudoPass) == "" {
+        return runSSH(user, sshPass, host, port, timeout, remote)
+    }
+
+    // otherwise feed sudoPass on stdin
+    return runSSHWithStdin(
+        user, sshPass, host, port, timeout,
+        fmt.Sprintf("sudo -S %s", remote),
+        sudoPass+"\n",
+    )
+}
+
+// RunWindowsRemoteScript uploads and runs a Windows batch via SFTP + cmd.
 func RunWindowsRemoteScript(user, password, host string, port int, timeout time.Duration, scriptPath string) (string, error) {
-	scriptName := filepath.Base(scriptPath)
-	remotePath := "C:\\tmp\\" + scriptName
+    scriptName := filepath.Base(scriptPath)
+    remote := "C:\\tmp\\" + scriptName
 
-	// Create remote temp dir
-	mkTmpCmd := `powershell -Command "if (!(Test-Path C:\\tmp)) { New-Item -ItemType Directory -Path C:\\tmp }"`
-	if _, err := RunCommand(user, password, host, port, timeout, mkTmpCmd); err != nil {
-		return "", fmt.Errorf("failed to create C:\\tmp: %v", err)
-	}
+    if _, err := runSSH(user, password, host, port, timeout,
+        `powershell -Command "if (!(Test-Path C:\\tmp)) { New-Item -ItemType Directory -Path C:\\tmp }"`); err != nil {
+        return "", fmt.Errorf("mk tmp dir: %v", err)
+    }
 
-	if err := SFTPUpload(user, password, host, port, timeout, scriptPath, remotePath); err != nil {
-		return "", fmt.Errorf("sftp upload failed: %v", err)
-	}
+    if err := tryUpload(user, password, host, port, scriptPath, remote, timeout); err != nil {
+        return "", fmt.Errorf("upload script: %v", err)
+    }
 
-	// Execute script using cmd.exe
-	execCmd := fmt.Sprintf(`cmd /C "C:\\tmp\\%s"`, scriptName)
-	return RunCommand(user, password, host, port, timeout, execCmd)
+    return runSSH(user, password, host, port, timeout, fmt.Sprintf(`cmd /C "%s"`, remote))
 }
 
-// Generic SSH command runner
-func RunCommand(user, password, host string, port int, timeout time.Duration, command string) (string, error) {
-	conn, session, err := connectSSH(user, password, host, port, timeout) // <- Uses run.go version
-	if err != nil {
-		return "", err
-	}
-	defer conn.Close()
-	defer session.Close()
+// runSSHWithStdin runs a command feeding stdin.
+func runSSHWithStdin(user, password, host string, port int, timeout time.Duration, cmd, stdin string) (string, error) {
+    conn, err := dialSSH(user, password, host, port, timeout)
+    if err != nil {
+        return "", err
+    }
+    defer conn.Close()
 
-	var outputBuf, stderrBuf bytes.Buffer
-	session.Stdout = &outputBuf
-	session.Stderr = &stderrBuf
+    session, err := conn.NewSession()
+    if err != nil {
+        return "", fmt.Errorf("new session: %v", err)
+    }
+    defer session.Close()
 
-	err = session.Run(command)
-	if err != nil {
-		return "", fmt.Errorf("ssh command error: %v\nstderr: %s", err, stderrBuf.String())
-	}
+    var out, stderr bytes.Buffer
+    session.Stdout = &out
+    session.Stderr = &stderr
+    session.Stdin = strings.NewReader(stdin)
 
-	return outputBuf.String(), nil
-}
-
-// Upload file using SFTP (used by Windows execution)
-func SFTPUpload(user, password, host string, port int, timeout time.Duration, localPath, remotePath string) error {
-	client, err := connectSSHRaw(user, password, host, port, timeout)
-	if err != nil {
-		return err
-	}
-	defer client.Close()
-
-	sftpClient, err := sftp.NewClient(client)
-	if err != nil {
-		return fmt.Errorf("failed to start sftp subsystem: %v", err)
-	}
-	defer sftpClient.Close()
-
-	dstFile, err := sftpClient.Create(remotePath)
-	if err != nil {
-		return fmt.Errorf("cannot create remote file: %v", err)
-	}
-	defer dstFile.Close()
-
-	srcFile, err := os.Open(localPath)
-	if err != nil {
-		return fmt.Errorf("cannot open local file: %v", err)
-	}
-	defer srcFile.Close()
-
-	if _, err := io.Copy(dstFile, srcFile); err != nil {
-		return fmt.Errorf("copy failed: %v", err)
-	}
-	return nil
-}
-
-// SSH connection helper (client only)
-func connectSSHRaw(user, password, host string, port int, timeout time.Duration) (*ssh.Client, error) {
-	var methods []ssh.AuthMethod
-
-	if sock := os.Getenv("SSH_AUTH_SOCK"); sock != "" {
-		if conn, err := net.Dial("unix", sock); err == nil {
-			agentClient := agent.NewClient(conn)
-			methods = append(methods, ssh.PublicKeysCallback(agentClient.Signers))
-		}
-	}
-
-	if strings.TrimSpace(password) != "" {
-		methods = append(methods, ssh.Password(password))
-	}
-
-	if len(methods) == 0 {
-		return nil, fmt.Errorf("no authentication methods available (no password or SSH agent)")
-	}
-
-	config := &ssh.ClientConfig{
-		User:            user,
-		Auth:            methods,
-		HostKeyCallback: ssh.InsecureIgnoreHostKey(),
-		Timeout:         timeout,
-	}
-
-	addr := fmt.Sprintf("%s:%d", host, port)
-	return ssh.Dial("tcp", addr, config)
+    if err := session.Run(cmd); err != nil {
+        return "", fmt.Errorf("ssh error: %v, stderr: %s", err, stderr.String())
+    }
+    return out.String(), nil
 }
