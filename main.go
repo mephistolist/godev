@@ -17,7 +17,6 @@ import (
 	"github.com/spf13/pflag"
 )
 
-// Split a string on a separator (like "::") but ignore escaped versions (e.g., "\::")
 func splitUnescaped(s string, sep string) []string {
 	var parts []string
 	var curr strings.Builder
@@ -36,7 +35,7 @@ func splitUnescaped(s string, sep string) []string {
 			continue
 		}
 		if escaped {
-			curr.WriteByte('\\') // Preserve the backslash if not followed by special char
+			curr.WriteByte('\\')
 			escaped = false
 		}
 		curr.WriteByte(s[i])
@@ -59,7 +58,6 @@ func unescapeField(s string) string {
 func parseInventoryLine(raw string, defUser string, defPort int) (client.HostInfo, error) {
 	line := strings.TrimSpace(raw)
 
-	// Remove comments not escaped
 	commentIndex := -1
 	inEscape := false
 	for i := 0; i < len(line); i++ {
@@ -85,28 +83,24 @@ func parseInventoryLine(raw string, defUser string, defPort int) (client.HostInf
 		Port: defPort,
 	}
 
-	// Process ::: first (sudo password)
 	parts := splitUnescaped(line, ":::")
 	if len(parts) == 2 {
 		line = parts[0]
 		info.SudoPassword = unescapeField(parts[1])
 	}
 
-	// Then process :: (SSH password)
 	parts = splitUnescaped(line, "::")
 	if len(parts) == 2 {
 		line = parts[0]
 		info.Password = unescapeField(parts[1])
 	}
 
-	// Then process user@host
 	parts = splitUnescaped(line, "@")
 	if len(parts) == 2 {
 		info.User = unescapeField(parts[0])
 		line = parts[1]
 	}
 
-	// Then process host:port
 	parts = splitUnescaped(line, ":")
 	if len(parts) == 2 {
 		info.Host = unescapeField(parts[0])
@@ -137,18 +131,20 @@ func main() {
 	pflag.BoolVarP(&promptForPassword, "password", "w", false, "Prompt for SSH password")
 	pflag.StringVarP(&scriptArg, "script", "s", "", "Path to a script or binary to upload and execute")
 	pflag.IntVarP(&concurrency, "concurrency", "c", 5, "Max concurrent SSH connections")
+
+	pflag.Usage = func() {
+		fmt.Fprintf(os.Stderr, "Usage of %s:\n", os.Args[0])
+		pflag.PrintDefaults()
+	}
+
 	pflag.Parse()
 
 	fileUsed := pflag.Lookup("file").Changed
 	scriptUsed := pflag.Lookup("script").Changed
 
-	if fileUsed && scriptUsed {
-		fmt.Fprintln(os.Stderr, "Error: Cannot use both -f/--file and -s/--script at the same time.")
-		os.Exit(1)
-	}
-
 	if !fileUsed && !scriptUsed {
 		fmt.Fprintln(os.Stderr, "Error: Either --file or --script must be provided.")
+		pflag.Usage()
 		os.Exit(1)
 	}
 
