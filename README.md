@@ -1,7 +1,7 @@
 # GoDev
 A simple cross-platform devops project in Golang that's built for speed and customization. 
 
-Since this is written with golang, you can use this program for Windows, Linux, Mac, Solaris, AIX or truly any operating system. There will always be some variation with Windows as binaries end with .exe and they have no equivalant to rsync other than sFTP. Otherwise this software this software should be completely cross-platform. 
+Since this is written with golang, you can use this program for Windows, Linux, Mac, Solaris, AIX or truly any operating system. There will always be some variation with Windows as binaries end with .exe and they have no equivalant to rsync other than sFTP. Otherwise this software should be completely cross-platform. 
 
 With Golang's concurrency, this will greatly outrun and perform faster than other DevOps software. In the event it is too fast, one can slow it down with the -t or --timeout flags. So you control the speed as you need it.
 
