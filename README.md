@@ -69,7 +69,7 @@ Works!
 
         1.16 real         0.29 user         0.08 sys
 ```
-You will probably noticed that we ran the program with the time command above and it is greatly faster than other popular DevOps software when running four different tasks across two hosts. If for whatever reason you need to slow this down, you can use the -t or --timeout option to add a pause in a number of seconds between hosts. Godev will always respect the order of commands in the commands.txt file, but it will not necessarily follow the order of hosts in the inventory file. If you need specific actions to happen on specific hosts in a certain order you can configure multiple inventory files and specify them with the -i or --inventory option. The only requirement here is that the file begins with the word "inventory" like inventory_web, inventory_linux, inventory_db, etc. 
+You will probably notice that we ran the program with the time command above and it is greatly faster than other popular DevOps software when running four different tasks across two hosts. If for whatever reason you need to slow this down, you can use the -t or --timeout option to add a pause in a number of seconds between hosts. Godev will always respect the order of commands in the commands.txt file, but it will not necessarily follow the order of hosts in the inventory file. If you need specific actions to happen on specific hosts in a certain order you can configure multiple inventory files and specify them with the -i or --inventory option. The only requirement here is that the file begins with the word "inventory" like inventory_web, inventory_linux, inventory_db, etc. 
 
 There is also another way to run code with the -s or --script option. Using this option we can rsync a script or binary written in any language to the /tmp folder of a host and execute it:
 
@@ -90,7 +90,7 @@ Hello GoDev!
 ```
 Of course this will differ slightly in Windows where sFTP is used in place of rsync, but it will accomplish the same goal. 
 
-The only requirements before using on non-Windows hosts are that SSH and rsync be installed and running. Windows 10 and above will only require openssh to be enabled as this will also enable sFTP in the process. To build this software, golang is installed and you can run the following from inside this project's directory:
+The only requirements before using on non-Windows hosts are that SSH and rsync be installed and running. Windows 10 and above will only require openssh to be enabled as this will also enable sFTP in the process. To build this software, if golang is installed and you can run the following from inside this project's directory:
 ```
 $ go build .
 ```
@@ -100,6 +100,8 @@ Lastly, if you need to run a command in commands.txt with sudo and a password, y
 ```
 echo "P@55w0rd" | sudo -S whoami
 ```
+However, this can be configured more easily in the inventory files. Comments can also be used in commands.txt with '#' as well.
+
 If you need to run an entire script or binary as root, you may just add the sudo password in your inventory file to use with the -s option. Or if no password is used with sudo, you can run it as a normal user to copy it to the /tmp folder on a remote server. Then add something the following to commands.txt and run it this way:
 ```
 sudo /tmp/my_super_script.sh
@@ -112,4 +114,3 @@ https://github.com/mephistolist/godev
 Keep checking semgrep.<br>
 Refactor for performance.<br>
 Polish README.<br>
-Debate if escaping the commands.txt file is worth it.<br> 
