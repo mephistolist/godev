@@ -67,13 +67,14 @@ func runSSH(user, password, host string, port int, timeout time.Duration, cmd st
 }
 
 // tryUpload first attempts rsync; on failure (e.g. Windows), falls back to SFTP.
-func tryUpload(user, password, host string, port int, localPath, remotePath string, timeout time.Duration) error {
+func tryUpload(user, password, host string, port int, localPath, remotePath string, timeout time.Duration) (bool, error) {
     rsync := exec.Command("rsync", "-e", fmt.Sprintf("ssh -p %d", port), localPath, fmt.Sprintf("%s@%s:%s", user, host, remotePath))
     if err := rsync.Run(); err == nil {
-        return nil
+        return false, nil // rsync succeeded → likely Unix
     }
     // fallback to SFTP
-    return sftpUpload(user, password, host, port, timeout, localPath, remotePath)
+    err := sftpUpload(user, password, host, port, timeout, localPath, remotePath)
+    return true, err // SFTP used → likely Windows
 }
 
 // sftpUpload pushes a file via the SFTP subsystem.
@@ -112,13 +113,14 @@ func sftpUpload(user, password, host string, port int, timeout time.Duration, lo
 func RunRemoteScript(user, password, host string, port int, timeout time.Duration, scriptPath string) (string, error) {
     scriptName := filepath.Base(scriptPath)
     remote := "/tmp/" + scriptName
-    ext := strings.ToLower(filepath.Ext(scriptName))
 
-    if err := tryUpload(user, password, host, port, scriptPath, remote, timeout); err != nil {
+    isWindows, err := tryUpload(user, password, host, port, scriptPath, remote, timeout)
+    if err != nil {
         return "", err
     }
 
-    if ext != ".bat" && ext != ".ps1" {
+    // Only chmod if it's not a Windows host
+    if !isWindows {
         if _, err := runSSH(user, password, host, port, timeout, fmt.Sprintf("chmod +x %s", remote)); err != nil {
             return "", fmt.Errorf("chmod failed: %v", err)
         }
@@ -190,15 +192,15 @@ func RunRemoteScriptWithSudo(
 ) (string, error) {
     scriptName := filepath.Base(scriptPath)
     remote := "/tmp/" + scriptName
-    ext := strings.ToLower(filepath.Ext(scriptName))
 
     // upload (rsync→SFTP)
-    if err := tryUpload(user, sshPass, host, port, scriptPath, remote, timeout); err != nil {
+    isWindows, err := tryUpload(user, sshPass, host, port, scriptPath, remote, timeout)
+    if err != nil {
         return "", err
     }
 
-    // make executable on Unix‑style hosts
-    if ext != ".bat" && ext != ".ps1" {
+    // chmod only if Unix-style
+    if !isWindows {
         if _, err := runSSH(user, sshPass, host, port, timeout,
             fmt.Sprintf("chmod +x %s", remote),
         ); err != nil {
@@ -206,12 +208,12 @@ func RunRemoteScriptWithSudo(
         }
     }
 
-    // if no sudo password, just run it
+    // if no sudo password, run directly
     if strings.TrimSpace(sudoPass) == "" {
         return runSSH(user, sshPass, host, port, timeout, remote)
     }
 
-    // otherwise feed sudoPass on stdin
+    // run with sudo on Unix
     return runSSHWithStdin(
         user, sshPass, host, port, timeout,
         fmt.Sprintf("sudo -S %s", remote),
@@ -224,12 +226,14 @@ func RunWindowsRemoteScript(user, password, host string, port int, timeout time.
     scriptName := filepath.Base(scriptPath)
     remote := "C:\\tmp\\" + scriptName
 
+    // ensure C:\tmp exists
     if _, err := runSSH(user, password, host, port, timeout,
         `powershell -Command "if (!(Test-Path C:\\tmp)) { New-Item -ItemType Directory -Path C:\\tmp }"`); err != nil {
         return "", fmt.Errorf("mk tmp dir: %v", err)
     }
 
-    if err := tryUpload(user, password, host, port, scriptPath, remote, timeout); err != nil {
+    _, err := tryUpload(user, password, host, port, scriptPath, remote, timeout)
+    if err != nil {
         return "", fmt.Errorf("upload script: %v", err)
     }
 
