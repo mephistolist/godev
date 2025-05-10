@@ -106,11 +106,12 @@ If you need to run an entire script or binary as root, you may just add the sudo
 ```
 sudo /tmp/my_super_script.sh
 ```
-This should conclude any information one needs to know to configure and use this software in all its forms. The fact we have done this in little over 100 lines instead of 100 or more pages like other DevOps software should showcase that simplicity was a goal all along here. Should issues arise, please open an issue on the following github:
+This should conclude any information one needs to know to configure and use this software in all its forms. The fact we have done this in little over 100 lines instead of 100 or more pages like other DevOps software should showcase that simplicity was a goal all along here. 
+
+For bug reports or feature requests, please open an issue at:
 
 https://github.com/mephistolist/godev  
 
 # Todo
 Keep checking semgrep.<br>
 Refactor for performance.<br>
-Polish README.<br>
