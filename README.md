@@ -28,7 +28,7 @@ Like most configuration files the '#' character can be used for comments. Should
 ```
 10.0.0.3::\:\@\:\:\#\:\:\:\\
 ```
-If we are executing this program with the same user we logging into the host with, SSH uses keys instead of passwords and SSH is on port 22, and don't need sudo, we could just use the host with nothing else on a line. Once we have configured the inventory file in our current directory we have two options to run code or commands on the hosts we configured. One is to use a .txt file, like commands.txt to include shell commands which we can call from any location with the -f or --file option:
+If we are executing this program with the same user we are logging into the host with, SSH uses keys instead of passwords, SSH is on port 22 and don't need sudo, we could just use the host with nothing else on a line. Once we have configured the inventory file in our current directory we have two options to run code or commands on the hosts we configured. One is to use a .txt file, like commands.txt to include shell commands which we can call from any location with the -f or --file option:
 ```
 $ cat commands.txt 
 uname -a
@@ -36,7 +36,7 @@ ps fuax
 vmstat
 echo Works!
 ```
-If we have configured both the inventory and commands.txt file correctly, you can run it from the directory:
+If we have configured both the inventory and commands.txt file correctly, like so:
 ```
 $ time godev -f /home/user/commands.txt
 ======================================
