@@ -7,12 +7,15 @@ import (
 	"os"
 	"path/filepath"
 	"time"
+	"net"
+	"context"
 
 	"golang.org/x/crypto/ssh"
 	skeemakh "github.com/skeema/knownhosts"
 )
 
-func Run(user, password, filePath, host string, port int, timeout time.Duration) (string, error) {
+// Updated Run signature to include allowUnknownHosts
+func Run(user, password, filePath, host string, port int, timeout time.Duration, allowUnknownHosts bool) (string, error) {
 	// Read all commands from file into a single big script
 	var script string
 	file, err := os.Open(filePath)
@@ -32,8 +35,8 @@ func Run(user, password, filePath, host string, port int, timeout time.Duration)
 		return "", fmt.Errorf("scanner error: %w", err)
 	}
 
-	// Establish SSH connection once
-	conn, session, err := connectSSH(user, password, host, port, timeout)
+	// Pass allowUnknownHosts to connectSSH
+	conn, session, err := connectSSH(user, password, host, port, timeout, allowUnknownHosts)
 	if err != nil {
 		return "", err
 	}
@@ -53,7 +56,7 @@ func Run(user, password, filePath, host string, port int, timeout time.Duration)
 	return outputBuf.String(), nil
 }
 
-func connectSSH(user, password, host string, port int, timeout time.Duration) (*ssh.Client, *ssh.Session, error) {
+func connectSSH(user, password, host string, port int, timeout time.Duration, allowUnknownHosts bool) (*ssh.Client, *ssh.Session, error) {
 	homeDir, err := os.UserHomeDir()
 	if err != nil {
 		return nil, nil, fmt.Errorf("get home directory: %w", err)
@@ -83,21 +86,31 @@ func connectSSH(user, password, host string, port int, timeout time.Duration) (*
 	config := &ssh.ClientConfig{
 		User:              user,
 		Auth:              authMethods,
-		HostKeyCallback:   kh.HostKeyCallback(),
+		HostKeyCallback:   getHostKeyCallback(allowUnknownHosts),
 		HostKeyAlgorithms: kh.HostKeyAlgorithms(addr),
-		Timeout:           timeout,
 	}
 
-	conn, err := ssh.Dial("tcp", addr, config)
+	// Use net.Dialer instead of ssh.Dial
+	dialer := net.Dialer{Timeout: timeout}
+	conn, err := dialer.DialContext(context.Background(), "tcp", addr)
 	if err != nil {
-		return nil, nil, fmt.Errorf("dial SSH: %w", err)
+		return nil, nil, fmt.Errorf("net dial: %w", err)
 	}
 
-	session, err := conn.NewSession()
+	// Establish the SSH connection on top of the TCP connection
+	sshConn, chans, reqs, err := ssh.NewClientConn(conn, addr, config)
 	if err != nil {
 		conn.Close()
+		return nil, nil, fmt.Errorf("ssh client conn: %w", err)
+	}
+
+	client := ssh.NewClient(sshConn, chans, reqs)
+
+	session, err := client.NewSession()
+	if err != nil {
+		client.Close()
 		return nil, nil, fmt.Errorf("new SSH session: %w", err)
 	}
 
-	return conn, session, nil
+	return client, session, nil
 }
