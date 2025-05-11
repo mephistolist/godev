@@ -7,12 +7,14 @@ import (
 	"path/filepath"
 	"sync"
 	"time"
+	"net"
 
 	"golang.org/x/crypto/ssh"
 	skeemakh "github.com/skeema/knownhosts"
 )
 
-func callSSH(command, user, password, host string, port int, timeout time.Duration, resultCh chan<- Result, wg *sync.WaitGroup) {
+// Updated callSSH with allowUnknownHosts
+func callSSH(command, user, password, host string, port int, timeout time.Duration, allowUnknownHosts bool, resultCh chan<- Result, wg *sync.WaitGroup) {
 	defer wg.Done()
 
 	homeDir, err := os.UserHomeDir()
@@ -52,12 +54,28 @@ func callSSH(command, user, password, host string, port int, timeout time.Durati
 	config := &ssh.ClientConfig{
 		User:              user,
 		Auth:              authMethods,
-		HostKeyCallback:   kh.HostKeyCallback(),
+		HostKeyCallback:   getHostKeyCallback(allowUnknownHosts),
 		HostKeyAlgorithms: kh.HostKeyAlgorithms(addr),
-		Timeout:           timeout,
+		//Timeout:           timeout,
 	}
 
-	conn, err := ssh.Dial("tcp", addr, config)
+	//conn, err := ssh.Dial("tcp", addr, config)
+	netDialer := net.Dialer{Timeout: timeout}
+	connRaw, err := netDialer.Dial("tcp", addr)
+	if err != nil {
+		resultCh <- Result{Host: host, Error: fmt.Errorf("dial TCP: %w", err)}
+		return
+	}
+
+	clientConn, chans, reqs, err := ssh.NewClientConn(connRaw, addr, config)
+	if err != nil {
+		resultCh <- Result{Host: host, Error: fmt.Errorf("new client connection: %w", err)}
+		connRaw.Close()
+		return
+	}
+	conn := ssh.NewClient(clientConn, chans, reqs)
+
+
 	if err != nil {
 		resultCh <- Result{Host: host, Error: fmt.Errorf("dial SSH: %w", err)}
 		return
