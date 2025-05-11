@@ -111,7 +111,3 @@ This should conclude any information one needs to know to configure and use this
 For bug reports or feature requests, please open an issue at:
 
 https://github.com/mephistolist/godev  
-
-# Todo
-Keep checking semgrep.<br>
-Refactor for performance.<br>
