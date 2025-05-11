@@ -35,11 +35,23 @@ func dialSSH(user, password, host string, port int, timeout time.Duration) (*ssh
     cfg := &ssh.ClientConfig{
         User:            user,
         Auth:            methods,
-        HostKeyCallback: ssh.InsecureIgnoreHostKey(),
-        Timeout:         timeout,
+        HostKeyCallback: ssh.InsecureIgnoreHostKey(), 
     }
+
     addr := fmt.Sprintf("%s:%d", host, port)
-    return ssh.Dial("tcp", addr, cfg)
+    netDialer := net.Dialer{Timeout: timeout}
+    conn, err := netDialer.Dial("tcp", addr)
+    if err != nil {
+        return nil, fmt.Errorf("tcp dial error: %w", err)
+    }
+
+    c, chans, reqs, err := ssh.NewClientConn(conn, addr, cfg)
+    if err != nil {
+        conn.Close()
+        return nil, fmt.Errorf("ssh client conn: %w", err)
+    }
+
+    return ssh.NewClient(c, chans, reqs), nil
 }
 
 // runSSH runs a command over SSH and returns its stdout.
