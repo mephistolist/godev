@@ -16,7 +16,7 @@ import (
 	"github.com/spf13/pflag"
 )
 
-const workerCount = 10
+const workerCount = 5
 
 func splitUnescaped(s string, sep string) []string {
 	var parts []string
@@ -249,7 +249,29 @@ func main() {
 			SudoPassword: "",
 		})
 	} else {
-		f, err := os.Open(inventoryArg)
+		cleanPath := filepath.Clean(inventoryArg)
+
+		// Disallow absolute paths and any use of ".."
+		if filepath.IsAbs(cleanPath) || strings.Contains(cleanPath, "..") {
+			fmt.Fprintf(os.Stderr, "Error: Invalid inventory file path %q\n", inventoryArg)
+			os.Exit(1)
+		}
+
+		// Disallow paths outside current working directory (optional, stricter)
+		absBase, _ := filepath.Abs(".")
+		absTarget, err := filepath.Abs(cleanPath)
+		if err != nil || !strings.HasPrefix(absTarget, absBase) {
+			fmt.Fprintf(os.Stderr, "Error: Inventory file path %q is not allowed\n", inventoryArg)
+			os.Exit(1)
+		}
+
+		// Check that the file name begins with "inventory"
+		if !strings.HasPrefix(filepath.Base(cleanPath), "inventory") {
+			fmt.Fprintf(os.Stderr, "Error: Inventory file must start with \"inventory\" (got: %q)\n", inventoryArg)
+			os.Exit(1)
+		}
+
+		f, err := os.Open(cleanPath)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Error: inventory file %q not found and no -host provided.\n", inventoryArg)
 			os.Exit(1)
