@@ -8,7 +8,6 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
-	"sync"
 	"syscall"
 	"time"
 
@@ -16,6 +15,8 @@ import (
 	"godev/client"
 	"github.com/spf13/pflag"
 )
+
+const workerCount = 5
 
 func splitUnescaped(s string, sep string) []string {
 	var parts []string
@@ -117,10 +118,45 @@ func parseInventoryLine(raw string, defUser string, defPort int) (client.HostInf
 	return info, nil
 }
 
+func worker(
+	id int,
+	jobs <-chan client.HostInfo,
+	results chan<- client.Result,
+	scriptUsed bool,
+	fileArg, scriptArg string,
+	timeout time.Duration,
+	allowUnknownHosts bool,
+) {
+	for host := range jobs {
+		var output string
+		var err error
+
+		if scriptUsed {
+			output, err = client.RunRemoteScriptWithSudo(
+			host.User,
+			host.Password,
+			strings.TrimSpace(host.SudoPassword),
+			host.Host,
+			host.Port,
+			timeout,
+			scriptArg,)
+		} else {
+			output, err = client.Run(host.User, host.Password, fileArg, host.Host, host.Port, timeout, allowUnknownHosts)
+		}
+
+		results <- client.Result{
+			Host:   host.Host,
+			Output: output,
+			Error:  err,
+		}
+	}
+}
+
 func main() {
 	var userArg, passwordArg, fileArg, hostArg, scriptArg, inventoryArg string
 	var portArg, timeoutSeconds int
 	var promptForPassword bool
+	var allowUnknownHosts bool
 
 	pflag.StringVarP(&userArg, "user", "u", "", "SSH username")
 	pflag.StringVarP(&fileArg, "file", "f", "commands.txt", "File containing commands")
@@ -130,11 +166,7 @@ func main() {
 	pflag.IntVarP(&portArg, "port", "p", 22, "SSH port")
 	pflag.BoolVarP(&promptForPassword, "password", "w", false, "Prompt for SSH password")
 	pflag.StringVarP(&scriptArg, "script", "s", "", "Path to a script or binary to upload and execute")
-
-	pflag.Usage = func() {
-		fmt.Fprintf(os.Stderr, "Usage of %s:\n", os.Args[0])
-		pflag.PrintDefaults()
-	}
+	pflag.BoolVarP(&allowUnknownHosts, "allow-unknown-hosts", "a", false, "Allow connecting to unknown SSH hosts")
 
 	pflag.Parse()
 
@@ -157,12 +189,12 @@ func main() {
 		os.Exit(1)
 	}
 
-	if portArg < 1 || portArg > 65335 {
-		fmt.Fprintln(os.Stderr, "Error: Port must be between 1 and 65335.")
+	if portArg < 1 || portArg > 65535 {
+		fmt.Fprintln(os.Stderr, "Error: Port must be between 1 and 65535.")
 		os.Exit(1)
 	}
-	if timeoutSeconds < 0 {
-		fmt.Fprintln(os.Stderr, "Error: Timeout must be a positive integer.")
+	if timeoutSeconds < 0 || timeoutSeconds > 600 {
+		fmt.Fprintln(os.Stderr, "Error: Timeout must be a positive integer less than or equal to 600.")
 		os.Exit(1)
 	}
 	timeout := time.Duration(timeoutSeconds) * time.Second
@@ -232,6 +264,7 @@ func main() {
 				continue
 			}
 			if h.Host != "" {
+				h.Password = passwordArg
 				hosts = append(hosts, h)
 			}
 		}
@@ -246,46 +279,30 @@ func main() {
 		os.Exit(1)
 	}
 
-	var wg sync.WaitGroup
-	var mu sync.Mutex
+	jobs := make(chan client.HostInfo, len(hosts))
+	results := make(chan client.Result, len(hosts))
 
-	const concurrencyLimit = 5
-	sem := make(chan struct{}, concurrencyLimit)
-
-		for _, h := range hosts {
-		wg.Add(1)
-		go func(h client.HostInfo) {
-			defer wg.Done()
-			sem <- struct{}{}
-			defer func() { <-sem }()
-
-			var out string
-			var err error
-			if scriptUsed {
-				// 🔧 This part checks if a sudo password was provided and acts accordingly.
-				if strings.TrimSpace(h.SudoPassword) == "" {
-					out, err = client.RunRemoteScriptWithSudo(h.User, h.Password, "", h.Host, h.Port, timeout, scriptArg)
-				} else {
-					out, err = client.RunRemoteScriptWithSudo(h.User, h.Password, h.SudoPassword, h.Host, h.Port, timeout, scriptArg)
-				}
-			} else {
-				out, err = client.Run(h.User, h.Password, fileArg, h.Host, h.Port, timeout)
-			}
-
-			mu.Lock()
-			defer mu.Unlock()
-			fmt.Printf("======================================\n")
-			if err != nil {
-				fmt.Printf("------ Error with host %s -----\n", h.Host)
-				fmt.Printf("======================================\n\n%v\n", err)
-			} else {
-				fmt.Printf("----- Output from host %s -----\n", h.Host)
-				fmt.Printf("======================================\n\n%s\n", out)
-			}
-			if timeout > 0 {
-				time.Sleep(timeout)
-			}
-		}(h)
+	// Start workers
+	for i := 0; i < workerCount; i++ {
+		go worker(i, jobs, results, scriptUsed, fileArg, scriptArg, timeout, allowUnknownHosts)
 	}
-	wg.Wait()
+
+	// Send jobs
+	for _, h := range hosts {
+		jobs <- h
+	}
+	close(jobs)
+
+	// Collect results
+	for i := 0; i < len(hosts); i++ {
+		res := <-results
+		fmt.Printf("======================================\n")
+		if res.Error != nil {
+			fmt.Printf("------ Error with host %s -----\n", res.Host)
+			fmt.Printf("======================================\n\n%v\n", res.Error)
+		} else {
+			fmt.Printf("----- Output from host %s -----\n", res.Host)
+			fmt.Printf("======================================\n\n%s\n", res.Output)
+		}
+	}
 }
