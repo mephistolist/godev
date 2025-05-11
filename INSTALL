@@ -7,11 +7,11 @@ If you are building from a Windows device, you will have similar steps, but you 
 
 If you wish to squeeze out every inch of performance, you can build like this on a Linux host with a 64-bit Arm processor: 
 
-$ GOARCH=arm64 GOOS=linux go build -ldflags "-s -w" -gcflags "-N -l" && strip ./godev
+$ GOARCH=arm64 GOOS=linux CGO_ENABLED=0 go build -trimpath -ldflags "-s -w" -gcflags "-N -l" && strip ./godev
 
 Or like this on a FreeBSD host with x86_64 CPU:
 
-$ GOARCH=amd64 GOOS=freebsd go build -ldflags "-s -w" -gcflags "-N -l" && strip ./godev
+$ GOARCH=amd64 GOOS=freebsd CGO_ENABLED=0 go build -trimpath -ldflags "-s -w" -gcflags "-N -l" -ldflags="-extldflags=-z,relro,-z,now" && strip ./godev
 
 Consult Golang's, your hardware's or your Operating System's documentation for specfying these types of specific builds on other enviroments. You may also use these steps when building the WinSync binary as well. 
 
