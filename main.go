@@ -16,7 +16,7 @@ import (
 	"github.com/spf13/pflag"
 )
 
-const workerCount = 5
+const workerCount = 10
 
 func splitUnescaped(s string, sep string) []string {
 	var parts []string
