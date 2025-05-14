@@ -3,7 +3,7 @@ As mentioned in the README file, considering you have golang installed, you can 
 $ go build .
 $ sudo cp godev /usr/bin/
 
-If you are building from a Windows device, you will have similar steps, but you will have godev.exe and WinSync.exe. You will also need to copy these files to C:\Windows\System32 or some other location in your path.
+If you are building from a Windows device, you will have similar steps, but you will have godev.exe and WinSync.exe. You will also need to copy these files to C:\Windows\System32 or some other location in your path. You can also use these same steps to build the 'goenc' folder and copy it to your path as well. 
 
 If you wish to squeeze out every inch of performance, you can build like this on a Linux host with a 64-bit Arm processor: 
 
@@ -13,6 +13,6 @@ Or like this on a FreeBSD host with x86_64 CPU:
 
 $ GOARCH=amd64 GOOS=freebsd CGO_ENABLED=0 go build -trimpath -ldflags "-s -w" -gcflags "-N -l" -ldflags="-extldflags=-z,relro,-z,now" && strip ./godev
 
-Consult Golang's, your hardware's or your Operating System's documentation for specfying these types of specific builds on other enviroments. You may also use these steps when building the WinSync binary as well. 
+Consult Golang's, your hardware's or your Operating System's documentation for specfying these types of specific builds on other enviroments. You may also use these steps when building the WinSync binary as well.  
 
 Please consult the README file for further configuration steps after building and installing this software.
