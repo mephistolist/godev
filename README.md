@@ -106,6 +106,13 @@ If you need to run an entire script or binary as root, you may just add the sudo
 ```
 sudo /tmp/my_super_script.sh
 ```
+After this project's release, it was pointed out that encryption may be needed for the inventory files. Despite tons of free file encrypters already available, you may now build the code in the 'goenc' folder and use this program to encrypt and decrypt files:
+```
+$ ./godevinc 
+Usage:
+  -e, --encrypt <path>   Encrypt a file
+  -d, --decrypt <path>   Decrypt a file
+```
 This should conclude any information one needs to know to configure and use this software in all its forms. The fact we have done this in little over 100 lines instead of 100 or more pages like other DevOps software should showcase that simplicity was a goal all along here. 
 
 For bug reports or feature requests, please open an issue at:
