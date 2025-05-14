@@ -96,7 +96,7 @@ $ go build .
 ```
 From there you may copy the 'godev' binary from your current folder to /usr/bin or somewhere in PATH. If on Windows this will probably be C:\Windows\System32. For more information on build options, see the INSTALL file.
 
-Lastly, if you need to run a command in commands.txt with sudo and a password, you can something like the following:
+If you need to run a command in commands.txt with sudo and a password, you can something like the following:
 ```
 echo "P@55w0rd" | sudo -S whoami
 ```
